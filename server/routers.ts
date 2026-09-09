@@ -19,6 +19,18 @@ const invoiceFieldsSchema = z.object({
   warnings: z.array(z.string()).default([]),
 });
 
+function fallbackFromText(text: string) {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const numbers = text.match(/\d+[,.]?\d*/g)?.map((value) => Number(value.replace(/,/g, ""))) ?? [];
+  const taxId = text.match(/\b\d{15}\b/)?.[0] ?? "";
+  const invoiceNumber = text.match(/(?:invoice|فاتورة|رقم)\s*[:#-]?\s*([A-Za-z0-9-]+)/i)?.[1] ?? "";
+  const issueDate = text.match(/\b(?:20\d{2}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]20\d{2})\b/)?.[0] ?? "";
+  const amounts = numbers.filter((number) => String(Math.trunc(number)).length < 15);
+  const total = Math.max(...amounts, 0);
+  const vat = amounts.find((number) => number > 0 && number < total && number / Math.max(total - number, 1) > 0.1 && number / Math.max(total - number, 1) < 0.2) ?? 0;
+  return invoiceFieldsSchema.parse({ vendorName: lines.find((line) => !/\d/.test(line)) ?? "", vendorTaxId: taxId, invoiceNumber, issueDate, subtotal: Math.max(total - vat, 0), vat, total, currency: "SAR", confidence: taxId || total ? 0.5 : 0.25, warnings: ["تم استخدام استخراج احتياطي؛ راجع الحقول يدوياً."] });
+}
+
 function contentToText(content: unknown) {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
@@ -76,7 +88,11 @@ export const appRouter = router({
           max_tokens: 1200,
         });
         const text = contentToText(response.choices[0]?.message?.content);
-        return parseModelJson(text);
+        try {
+          return parseModelJson(text);
+        } catch {
+          return fallbackFromText(text);
+        }
       }),
   }),
 });

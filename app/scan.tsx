@@ -44,6 +44,42 @@ export default function ScanScreen() {
   const cameraRef = useRef<CameraView>(null);
   const analyze = trpc.invoice.analyze.useMutation();
 
+  const assetToDataUrl = async (uri: string, mimeType: ImageMime) => {
+    if (uri.startsWith("data:")) return uri;
+    if (Platform.OS !== "web") {
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      return `data:${mimeType};base64,${base64}`;
+    }
+    const response = await fetch(uri);
+    if (!response.ok) throw new Error("تعذر قراءة الملف المحلي");
+    const buffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+    }
+    return `data:${mimeType};base64,${globalThis.btoa(binary)}`;
+  };
+
+  const mergeDrafts = (local: InvoiceDraft | null, remote: Partial<InvoiceDraft>) => ({
+    ...emptyDraft,
+    ...(local ?? {}),
+    ...remote,
+    vendorName: remote.vendorName || local?.vendorName || "",
+    vendorTaxId: remote.vendorTaxId || local?.vendorTaxId || "",
+    invoiceNumber: remote.invoiceNumber || local?.invoiceNumber || "",
+    issueDate: remote.issueDate || local?.issueDate || "",
+    projectName: remote.projectName || local?.projectName || "",
+    subtotal: remote.subtotal || local?.subtotal || 0,
+    vat: remote.vat || local?.vat || 0,
+    total: remote.total || local?.total || 0,
+    currency: remote.currency || local?.currency || "SAR",
+    confidence: Math.max(remote.confidence ?? 0, local?.confidence ?? 0),
+    source: local?.source ?? "camera",
+    sourceUri: local?.sourceUri,
+  } satisfies InvoiceDraft);
+
   const processAsset = async (uri: string, source: InvoiceSource, mimeType: ImageMime = "image/jpeg") => {
     setImageUri(uri);
     setDraft(null);
@@ -61,17 +97,11 @@ export default function ScanScreen() {
         }
       }
 
-      let imageUrl = uri;
-      try {
-        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-        imageUrl = `data:${mimeType};base64,${base64}`;
-      } catch {
-        // Web blob URLs are not readable by the legacy filesystem; local review remains available.
-      }
+      const imageUrl = await assetToDataUrl(uri, mimeType);
 
       setProgressLabel("جاري تحليل الحقول بالعربية والإنجليزية...");
       const result = await analyze.mutateAsync({ imageUrl, mimeType, language: "ar" });
-      setDraft({ ...emptyDraft, ...result, source, sourceUri: uri });
+      setDraft(mergeDrafts(localDraft, { ...result, source, sourceUri: uri }));
     } catch {
       setDraft(localDraft ?? { ...emptyDraft, source, sourceUri: uri, confidence: 0.35 });
       Alert.alert(
