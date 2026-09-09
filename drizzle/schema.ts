@@ -25,4 +25,17 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
+export const googleSheetsConnections = mysqlTable("google_sheets_connections", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  refreshToken: text("refreshToken").notNull(),
+  spreadsheetId: varchar("spreadsheetId", { length: 255 }),
+  spreadsheetUrl: text("spreadsheetUrl"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type GoogleSheetsConnection = typeof googleSheetsConnections.$inferSelect;
+export type InsertGoogleSheetsConnection = typeof googleSheetsConnections.$inferInsert;
+
 // TODO: Add your tables here
