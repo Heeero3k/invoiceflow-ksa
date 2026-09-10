@@ -13,10 +13,11 @@ import { useInvoices, type InvoiceDraft, type InvoiceSource } from "@/lib/invoic
 import { trpc } from "@/lib/trpc";
 import { buildLocalInvoiceDraft, extractLocalInvoiceText } from "@/lib/local-ocr";
 import { exportInvoicesToGoogleSheets } from "@/lib/google-sheets";
-import { isValidSaudiTaxId } from "@/shared/invoice-utils";
+import { decodeSaudiQrPayload, isValidSaudiTaxId } from "@/shared/invoice-utils";
 
 const emptyDraft: InvoiceDraft = {
   vendorName: "",
+  customerName: "",
   vendorTaxId: "",
   invoiceNumber: "",
   issueDate: "",
@@ -27,6 +28,8 @@ const emptyDraft: InvoiceDraft = {
   currency: "SAR",
   confidence: 0.35,
   source: "camera",
+  category: "مشتريات / فاتورة ضريبية",
+  qrStatus: "غير مفحوص",
 };
 
 type ImageMime = "image/jpeg" | "image/png" | "application/pdf";
@@ -37,6 +40,7 @@ export default function ScanScreen() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [showCamera, setShowCamera] = useState(false);
   const [qrValue, setQrValue] = useState("");
+  const [qrExtraction, setQrExtraction] = useState<Partial<InvoiceDraft> | null>(null);
   const [imageUri, setImageUri] = useState<string | undefined>();
   const [processing, setProcessing] = useState(false);
   const [progressLabel, setProgressLabel] = useState("");
@@ -67,6 +71,7 @@ export default function ScanScreen() {
     ...(local ?? {}),
     ...remote,
     vendorName: remote.vendorName || local?.vendorName || "",
+    customerName: remote.customerName || local?.customerName || "",
     vendorTaxId: remote.vendorTaxId || local?.vendorTaxId || "",
     invoiceNumber: remote.invoiceNumber || local?.invoiceNumber || "",
     issueDate: remote.issueDate || local?.issueDate || "",
@@ -78,6 +83,8 @@ export default function ScanScreen() {
     confidence: Math.max(remote.confidence ?? 0, local?.confidence ?? 0),
     source: local?.source ?? "camera",
     sourceUri: local?.sourceUri,
+    category: remote.category || local?.category || "مشتريات / فاتورة ضريبية",
+    qrStatus: remote.qrStatus || local?.qrStatus || "غير مفحوص",
   } satisfies InvoiceDraft);
 
   const processAsset = async (uri: string, source: InvoiceSource, mimeType: ImageMime = "image/jpeg") => {
@@ -125,7 +132,14 @@ export default function ScanScreen() {
   };
 
   const handleBarcode = ({ data }: BarcodeScanningResult) => {
-    if (data && data !== qrValue) setQrValue(data);
+    if (!data || data === qrValue) return;
+    const extracted = decodeSaudiQrPayload(data);
+    setQrValue(data);
+    if (extracted) {
+      setQrExtraction(extracted);
+      setShowCamera(false);
+      setDraft({ ...emptyDraft, ...extracted, source: "camera", confidence: extracted.confidence ?? 0.92, qrStatus: extracted.qrStatus ?? "مطابق بنيوياً" });
+    }
   };
 
   const saveInvoice = async () => {
@@ -156,7 +170,7 @@ export default function ScanScreen() {
   if (draft) {
     const taxIdInvalid = Boolean(draft.vendorTaxId && !isValidSaudiTaxId(draft.vendorTaxId));
     const recalculateTotal = () => setDraft({ ...draft, total: Number((draft.subtotal + draft.vat).toFixed(2)) });
-    return <ScreenContainer className="px-5 pt-4" edges={["top", "left", "right"]}><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}><View style={styles.topRow}><Pressable onPress={() => { setDraft(null); setImageUri(undefined); }}><Text style={[styles.back, { color: colors.primary }]}>رجوع</Text></Pressable><View style={styles.alignEnd}><Text style={[styles.kicker, { color: colors.primary }]}>مراجعة قبل الحفظ</Text><Text style={[styles.titleSmall, { color: colors.foreground }]}>بيانات الفاتورة</Text></View></View>{imageUri && draft.source !== "pdf" && <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="cover" />}{draft.source === "pdf" && <View style={[styles.pdfPreview, { backgroundColor: colors.surface, borderColor: colors.border }]}><IconSymbol name="doc.text.fill" size={28} color={colors.primary} /><Text style={[styles.pdfText, { color: colors.foreground }]}>ملف PDF مستورد</Text><Text style={[styles.pdfHint, { color: colors.muted }]}>راجع الحقول المستخرجة قبل الاعتماد</Text></View>}<View style={[styles.aiStatus, { backgroundColor: draft.confidence >= 0.82 ? "#E8F6F1" : "#FFF4DD" }]}><IconSymbol name={draft.confidence >= 0.82 ? "checkmark.circle.fill" : "questionmark.circle"} color={draft.confidence >= 0.82 ? colors.success : "#B67511"} size={20} /><View style={styles.flex}><Text style={[styles.aiTitle, { color: colors.foreground }]}>{draft.confidence >= 0.82 ? "البيانات موثوقة" : "راجع الحقول المظللة قبل الحفظ"}</Text><Text style={[styles.aiCopy, { color: colors.muted }]}>درجة الثقة {Math.round(draft.confidence * 100)}% · يمكنك تعديل أي قيمة يدوياً.</Text></View></View>{qrValue && <View style={[styles.qrNotice, { borderColor: colors.primary }]}><IconSymbol name="checkmark.circle.fill" size={17} color={colors.primary} /><Text style={[styles.qrNoticeText, { color: colors.foreground }]}>تم التقاط QR؛ قارنه مع الرقم الضريبي والإجمالي قبل الحفظ.</Text></View>}<ReviewHeader title="البيانات الأساسية" copy="اضغط على أي قيمة لتصحيحها" colors={colors} /><Field label="اسم المورد / البائع" value={draft.vendorName} onChangeText={(value) => setDraft({ ...draft, vendorName: value })} colors={colors} /><Field label="الرقم الضريبي" value={draft.vendorTaxId} onChangeText={(value) => setDraft({ ...draft, vendorTaxId: value })} keyboardType="numeric" invalid={taxIdInvalid} helper={taxIdInvalid ? "يجب أن يتكون الرقم الضريبي السعودي من 15 رقماً." : "15 رقماً عند توفره"} colors={colors} /><View style={styles.fieldRow}><Field label="رقم الفاتورة" value={draft.invoiceNumber} onChangeText={(value) => setDraft({ ...draft, invoiceNumber: value })} colors={colors} half /><Field label="التاريخ" value={draft.issueDate} onChangeText={(value) => setDraft({ ...draft, issueDate: value })} colors={colors} half /></View><Field label="المشروع / موقع العمل" value={draft.projectName} onChangeText={(value) => setDraft({ ...draft, projectName: value })} colors={colors} /><ReviewHeader title="المبالغ" copy="استخدم الأرقام كما تظهر في الفاتورة" colors={colors} /><View style={styles.fieldRow}><Field label="قبل الضريبة" value={String(draft.subtotal || "")} onChangeText={(value) => setDraft({ ...draft, subtotal: Number(value.replace(/,/g, "")) || 0 })} keyboardType="numeric" colors={colors} half /><Field label="الضريبة" value={String(draft.vat || "")} onChangeText={(value) => setDraft({ ...draft, vat: Number(value.replace(/,/g, "")) || 0 })} keyboardType="numeric" colors={colors} half /></View><Field label="الإجمالي شامل الضريبة" value={String(draft.total || "")} onChangeText={(value) => setDraft({ ...draft, total: Number(value.replace(/,/g, "")) || 0 })} keyboardType="numeric" colors={colors} /><Pressable onPress={recalculateTotal} style={({ pressed }) => [styles.recalcButton, { borderColor: colors.border }, pressed && styles.pressed]}><IconSymbol name="tablecells" color={colors.primary} size={17} /><Text style={[styles.recalcText, { color: colors.primary }]}>احسب الإجمالي من قبل الضريبة + VAT</Text></Pressable><Pressable onPress={saveInvoice} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><IconSymbol name="checkmark.circle.fill" color="#FFFFFF" size={21} /><Text style={styles.saveText}>حفظ الفاتورة في السجل</Text></Pressable><Text style={[styles.disclaimer, { color: colors.muted }]}>المراجعة البشرية مطلوبة دائماً للحقول الضريبية. التطبيق ليس بديلاً عن نظام الفوترة أو الإقرار الرسمي.</Text></ScrollView></ScreenContainer>;
+    return <ScreenContainer className="px-5 pt-4" edges={["top", "left", "right"]}><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}><View style={styles.topRow}><Pressable onPress={() => { setDraft(null); setImageUri(undefined); }}><Text style={[styles.back, { color: colors.primary }]}>رجوع</Text></Pressable><View style={styles.alignEnd}><Text style={[styles.kicker, { color: colors.primary }]}>مراجعة قبل الحفظ</Text><Text style={[styles.titleSmall, { color: colors.foreground }]}>بيانات الفاتورة</Text></View></View>{imageUri && draft.source !== "pdf" && <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="cover" />}{draft.source === "pdf" && <View style={[styles.pdfPreview, { backgroundColor: colors.surface, borderColor: colors.border }]}><IconSymbol name="doc.text.fill" size={28} color={colors.primary} /><Text style={[styles.pdfText, { color: colors.foreground }]}>ملف PDF مستورد</Text><Text style={[styles.pdfHint, { color: colors.muted }]}>راجع الحقول المستخرجة قبل الاعتماد</Text></View>}<View style={[styles.aiStatus, { backgroundColor: draft.confidence >= 0.82 ? "#E8F6F1" : "#FFF4DD" }]}><IconSymbol name={draft.confidence >= 0.82 ? "checkmark.circle.fill" : "questionmark.circle"} color={draft.confidence >= 0.82 ? colors.success : "#B67511"} size={20} /><View style={styles.flex}><Text style={[styles.aiTitle, { color: colors.foreground }]}>{draft.confidence >= 0.82 ? "البيانات موثوقة" : "راجع الحقول المظللة قبل الحفظ"}</Text><Text style={[styles.aiCopy, { color: colors.muted }]}>درجة الثقة {Math.round(draft.confidence * 100)}% · يمكنك تعديل أي قيمة يدوياً.</Text></View></View>{qrValue && <View style={[styles.qrNotice, { borderColor: colors.primary }]}><IconSymbol name="checkmark.circle.fill" size={17} color={colors.primary} /><Text style={[styles.qrNoticeText, { color: colors.foreground }]}>تم التقاط QR؛ قارنه مع الرقم الضريبي والإجمالي قبل الحفظ.</Text></View>}<ReviewHeader title="البيانات الأساسية" copy="اضغط على أي قيمة لتصحيحها" colors={colors} /><Field label="اسم المورد / البائع" value={draft.vendorName} onChangeText={(value) => setDraft({ ...draft, vendorName: value })} colors={colors} /><Field label="اسم العميل / الشركة المستلمة" value={draft.customerName} onChangeText={(value) => setDraft({ ...draft, customerName: value })} colors={colors} /><Field label="الرقم الضريبي" value={draft.vendorTaxId} onChangeText={(value) => setDraft({ ...draft, vendorTaxId: value })} keyboardType="numeric" invalid={taxIdInvalid} helper={taxIdInvalid ? "يجب أن يتكون الرقم الضريبي السعودي من 15 رقماً." : "15 رقماً عند توفره"} colors={colors} /><View style={styles.fieldRow}><Field label="رقم الفاتورة" value={draft.invoiceNumber} onChangeText={(value) => setDraft({ ...draft, invoiceNumber: value })} colors={colors} half /><Field label="التاريخ" value={draft.issueDate} onChangeText={(value) => setDraft({ ...draft, issueDate: value })} colors={colors} half /></View><Field label="المشروع / موقع العمل" value={draft.projectName} onChangeText={(value) => setDraft({ ...draft, projectName: value })} colors={colors} /><Field label="تصنيف الفاتورة" value={draft.category} onChangeText={(value) => setDraft({ ...draft, category: value })} colors={colors} /><ReviewHeader title="المبالغ" copy="استخدم الأرقام كما تظهر في الفاتورة" colors={colors} /><View style={styles.fieldRow}><Field label="قبل الضريبة" value={String(draft.subtotal || "")} onChangeText={(value) => setDraft({ ...draft, subtotal: Number(value.replace(/,/g, "")) || 0 })} keyboardType="numeric" colors={colors} half /><Field label="الضريبة" value={String(draft.vat || "")} onChangeText={(value) => setDraft({ ...draft, vat: Number(value.replace(/,/g, "")) || 0 })} keyboardType="numeric" colors={colors} half /></View><Field label="الإجمالي شامل الضريبة" value={String(draft.total || "")} onChangeText={(value) => setDraft({ ...draft, total: Number(value.replace(/,/g, "")) || 0 })} keyboardType="numeric" colors={colors} /><Pressable onPress={recalculateTotal} style={({ pressed }) => [styles.recalcButton, { borderColor: colors.border }, pressed && styles.pressed]}><IconSymbol name="tablecells" color={colors.primary} size={17} /><Text style={[styles.recalcText, { color: colors.primary }]}>احسب الإجمالي من قبل الضريبة + VAT</Text></Pressable><Pressable onPress={saveInvoice} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><IconSymbol name="checkmark.circle.fill" color="#FFFFFF" size={21} /><Text style={styles.saveText}>حفظ الفاتورة في السجل</Text></Pressable><Text style={[styles.disclaimer, { color: colors.muted }]}>المراجعة البشرية مطلوبة دائماً للحقول الضريبية. التطبيق ليس بديلاً عن نظام الفوترة أو الإقرار الرسمي.</Text></ScrollView></ScreenContainer>;
   }
 
   return <ScreenContainer className="px-5 pt-4" edges={["top", "left", "right"]}><ScrollView contentContainerStyle={styles.content}><View style={styles.topRow}><Pressable onPress={() => router.back()}><Text style={[styles.back, { color: colors.primary }]}>إلغاء</Text></Pressable><View style={styles.alignEnd}><Text style={[styles.kicker, { color: colors.primary }]}>التقاط سريع</Text><Text style={[styles.titleSmall, { color: colors.foreground }]}>مسح فاتورة</Text></View></View><View style={[styles.scanHero, { backgroundColor: colors.foreground }]}><View style={styles.heroCircle}><IconSymbol name="viewfinder" color={colors.background} size={34} /></View><Text style={styles.scanTitle}>حوّل الورق إلى بيانات مرتبة</Text><Text style={styles.scanCopy}>OCR محلي دون اتصال، ثم تحليل أعمق عند توفر الإنترنت.</Text><View style={styles.steps}><Step number="1" text="صوّر أو استورد" /><Step number="2" text="راجع الحقول" /><Step number="3" text="صدّر للسجل" /></View></View><Text style={[styles.sectionTitle, { color: colors.foreground }]}>اختر مصدر الفاتورة</Text><SourceButton icon="viewfinder" title="التقاط بالكاميرا" copy="تصوير حي مع قراءة QR وOCR محلي" onPress={startCamera} colors={colors} /><SourceButton icon="plus.circle.fill" title="اختيار من الصور" copy="صورة محلية من المعرض" onPress={pickImage} colors={colors} /><SourceButton icon="doc.text.fill" title="استيراد ملف PDF" copy="فاتورة أو مستند من الجهاز" onPress={pickPdf} colors={colors} /><View style={[styles.tip, { backgroundColor: "#E8F6F1" }]}><IconSymbol name="checkmark.circle.fill" color={colors.primary} size={18} /><Text style={[styles.tipText, { color: colors.foreground }]}>لأفضل نتيجة: صوّر الفاتورة كاملة بإضاءة جيدة وتجنب الانعكاسات.</Text></View>{processing && <View style={styles.processing}><ActivityIndicator color={colors.primary} /><Text style={[styles.processingText, { color: colors.foreground }]}>{progressLabel}</Text></View>}</ScrollView></ScreenContainer>;

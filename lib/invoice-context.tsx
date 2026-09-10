@@ -8,6 +8,7 @@ export type InvoiceSource = "camera" | "gallery" | "pdf";
 export type Invoice = {
   id: string;
   vendorName: string;
+  customerName: string;
   vendorTaxId: string;
   invoiceNumber: string;
   issueDate: string;
@@ -19,6 +20,8 @@ export type Invoice = {
   confidence: number;
   status: InvoiceStatus;
   source: InvoiceSource;
+  category: string;
+  qrStatus?: string;
   sourceUri?: string;
   createdAt: string;
 };

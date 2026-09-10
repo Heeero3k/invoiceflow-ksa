@@ -7,6 +7,7 @@ import { publicProcedure, router } from "./_core/trpc";
 
 const invoiceFieldsSchema = z.object({
   vendorName: z.string().default(""),
+  customerName: z.string().default(""),
   vendorTaxId: z.string().default(""),
   invoiceNumber: z.string().default(""),
   issueDate: z.string().default(""),
@@ -17,6 +18,7 @@ const invoiceFieldsSchema = z.object({
   currency: z.string().default("SAR"),
   confidence: z.number().min(0).max(1).default(0.45),
   warnings: z.array(z.string()).default([]),
+  category: z.string().default("مشتريات / فاتورة ضريبية"),
 });
 
 function fallbackFromText(text: string) {
@@ -28,7 +30,7 @@ function fallbackFromText(text: string) {
   const amounts = numbers.filter((number) => String(Math.trunc(number)).length < 15);
   const total = Math.max(...amounts, 0);
   const vat = amounts.find((number) => number > 0 && number < total && number / Math.max(total - number, 1) > 0.1 && number / Math.max(total - number, 1) < 0.2) ?? 0;
-  return invoiceFieldsSchema.parse({ vendorName: lines.find((line) => !/\d/.test(line)) ?? "", vendorTaxId: taxId, invoiceNumber, issueDate, subtotal: Math.max(total - vat, 0), vat, total, currency: "SAR", confidence: taxId || total ? 0.5 : 0.25, warnings: ["تم استخدام استخراج احتياطي؛ راجع الحقول يدوياً."] });
+  return invoiceFieldsSchema.parse({ vendorName: lines.find((line) => !/\d/.test(line)) ?? "", customerName: "", vendorTaxId: taxId, invoiceNumber, issueDate, projectName: lines.find((line) => /(?:مشروع|project|موقع|site)/i.test(line)) ?? "", subtotal: Math.max(total - vat, 0), vat, total, currency: "SAR", confidence: taxId || total ? 0.5 : 0.25, category: "مشتريات / فاتورة ضريبية", warnings: ["تم استخدام استخراج احتياطي؛ راجع الحقول يدوياً."] });
 }
 
 function contentToText(content: unknown) {
@@ -76,7 +78,7 @@ export const appRouter = router({
               content: [
                 {
                   type: "text",
-                  text: "استخرج اسم البائع، الرقم الضريبي، رقم الفاتورة، التاريخ، اسم المشروع أو الموقع، المجموع قبل الضريبة، ضريبة القيمة المضافة، الإجمالي، العملة، ونسبة ثقة إجمالية من 0 إلى 1.",
+                  text: "استخرج اسم المورد أو البائع، اسم العميل أو الشركة المستلمة، الرقم الضريبي، رقم الفاتورة، التاريخ، اسم المشروع أو موقع العمل، المجموع قبل الضريبة، ضريبة القيمة المضافة، الإجمالي بعد الضريبة، العملة، وتصنيف الفاتورة مثل مشتريات أو مواد بناء أو خدمات أو نقل، مع نسبة ثقة إجمالية من 0 إلى 1.",
                 },
                 input.mimeType === "application/pdf"
                   ? { type: "file_url", file_url: { url: input.imageUrl, mime_type: input.mimeType } }

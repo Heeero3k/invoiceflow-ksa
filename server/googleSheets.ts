@@ -137,7 +137,7 @@ export function registerGoogleSheetsRoutes(app: Express) {
         spreadsheetId = created.data.spreadsheetId || "";
         if (!spreadsheetId) throw new Error("Google did not return a spreadsheet id");
         await db.upsertGoogleSheetsConnection({ userId: user.id, refreshToken: connection.refreshToken, spreadsheetId, spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit` });
-        await sheets.spreadsheets.values.update({ spreadsheetId, range: "الفواتير!A1", valueInputOption: "USER_ENTERED", requestBody: { values: [["اسم المورد", "الرقم الضريبي", "رقم الفاتورة", "التاريخ", "المشروع", "قبل الضريبة", "الضريبة", "الإجمالي", "العملة", "الحالة"]] } });
+        await sheets.spreadsheets.values.update({ spreadsheetId, range: "الفواتير!A1", valueInputOption: "USER_ENTERED", requestBody: { values: [["اسم المورد", "اسم العميل", "الرقم الضريبي", "رقم الفاتورة", "التاريخ", "المشروع / الموقع", "قبل الضريبة", "الضريبة", "الإجمالي بعد الضريبة", "العملة", "الحالة", "التصنيف", "حالة QR / ZATCA"]] } });
       }
       const result = await sheets.spreadsheets.values.append({ spreadsheetId, range: "الفواتير!A:Z", valueInputOption: "USER_ENTERED", insertDataOption: "INSERT_ROWS", requestBody: { values: payload.rows } });
       return res.json({ spreadsheetId, spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`, updatedRange: result.data.updates?.updatedRange || null });
