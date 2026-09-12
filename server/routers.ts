@@ -4,6 +4,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { invokeLLM } from "./_core/llm";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
+import { PDFParse } from "pdf-parse";
 
 const invoiceFieldsSchema = z.object({
   vendorName: z.string().default(""),
@@ -51,6 +52,22 @@ function parseModelJson(text: string) {
   return invoiceFieldsSchema.parse(JSON.parse(cleaned.slice(start, end + 1)));
 }
 
+function hasUsefulFields(result: ReturnType<typeof invoiceFieldsSchema.parse>) {
+  return Boolean(result.vendorName || result.vendorTaxId || result.invoiceNumber || result.issueDate || result.projectName || result.subtotal || result.vat || result.total);
+}
+
+async function extractPdfText(dataUrl: string) {
+  const match = dataUrl.match(/^data:application\/pdf;base64,(.+)$/s);
+  if (!match) return "";
+  const parser = new PDFParse({ data: Buffer.from(match[1], "base64") });
+  try {
+    const result = await parser.getText();
+    return result.text?.trim() ?? "";
+  } finally {
+    await parser.destroy();
+  }
+}
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -66,6 +83,13 @@ export const appRouter = router({
       .input(z.object({ imageUrl: z.string().min(1), mimeType: z.enum(["image/jpeg", "image/png", "application/pdf"]).default("image/jpeg"), language: z.enum(["ar", "en"]).default("ar") }))
       .mutation(async ({ input }) => {
         const language = input.language === "ar" ? "العربية" : "English";
+        if (input.mimeType === "application/pdf") {
+          const pdfText = await extractPdfText(input.imageUrl).catch(() => "");
+          if (pdfText) {
+            const extracted = fallbackFromText(pdfText);
+            if (hasUsefulFields(extracted)) return extracted;
+          }
+        }
         const response = await invokeLLM({
           model: "gemini-3-flash-preview",
           messages: [
@@ -91,9 +115,13 @@ export const appRouter = router({
         });
         const text = contentToText(response.choices[0]?.message?.content);
         try {
-          return parseModelJson(text);
+          const parsed = parseModelJson(text);
+          if (!hasUsefulFields(parsed)) throw new Error("AI returned empty invoice fields");
+          return parsed;
         } catch {
-          return fallbackFromText(text);
+          const fallback = fallbackFromText(text);
+          if (!hasUsefulFields(fallback)) throw new Error("لم يتم استخراج بيانات من الملف؛ استخدم صورة واضحة أو PDF نصي");
+          return fallback;
         }
       }),
   }),

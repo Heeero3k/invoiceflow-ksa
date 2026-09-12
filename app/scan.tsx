@@ -44,6 +44,7 @@ export default function ScanScreen() {
   const [imageUri, setImageUri] = useState<string | undefined>();
   const [processing, setProcessing] = useState(false);
   const [progressLabel, setProgressLabel] = useState("");
+  const [extractionError, setExtractionError] = useState("");
   const [draft, setDraft] = useState<InvoiceDraft | null>(null);
   const cameraRef = useRef<CameraView>(null);
   const analyze = trpc.invoice.analyze.useMutation();
@@ -81,8 +82,8 @@ export default function ScanScreen() {
     total: remote.total || local?.total || 0,
     currency: remote.currency || local?.currency || "SAR",
     confidence: Math.max(remote.confidence ?? 0, local?.confidence ?? 0),
-    source: local?.source ?? "camera",
-    sourceUri: local?.sourceUri,
+    source: remote.source ?? local?.source ?? "camera",
+    sourceUri: remote.sourceUri ?? local?.sourceUri,
     category: remote.category || local?.category || "مشتريات / فاتورة ضريبية",
     qrStatus: remote.qrStatus || local?.qrStatus || "غير مفحوص",
   } satisfies InvoiceDraft);
@@ -90,6 +91,7 @@ export default function ScanScreen() {
   const processAsset = async (uri: string, source: InvoiceSource, mimeType: ImageMime = "image/jpeg") => {
     setImageUri(uri);
     setDraft(null);
+    setExtractionError("");
     setProcessing(true);
     setProgressLabel("جاري قراءة الصورة وتحسين النص...");
     let localDraft: InvoiceDraft | null = null;
@@ -109,11 +111,13 @@ export default function ScanScreen() {
       setProgressLabel("جاري تحليل الحقول بالعربية والإنجليزية...");
       const result = await analyze.mutateAsync({ imageUrl, mimeType, language: "ar" });
       setDraft(mergeDrafts(localDraft, { ...result, source, sourceUri: uri }));
-    } catch {
-      setDraft(localDraft ?? { ...emptyDraft, source, sourceUri: uri, confidence: 0.35 });
+    } catch (error) {
+      if (localDraft) setDraft(localDraft);
+      else setDraft(null);
+      setExtractionError(error instanceof Error ? error.message : "تعذر استخراج بيانات الفاتورة");
       Alert.alert(
-        "تم تجهيز الصورة للمراجعة",
-        localDraft ? "تم استخدام OCR المحلي دون اتصال. راجع الحقول قبل الحفظ." : "تعذر الوصول إلى خدمة التحليل الآن. راجع الحقول يدوياً ثم احفظ الفاتورة.",
+        localDraft ? "تم تجهيز الفاتورة جزئياً" : "لم يتم استخراج بيانات الفاتورة",
+        localDraft ? "تم استخدام OCR المحلي. راجع الحقول قبل الحفظ." : "استخدم صورة واضحة أو PDF يحتوي نصاً قابلاً للتحديد ثم أعد المحاولة.",
       );
     } finally {
       setProcessing(false);
