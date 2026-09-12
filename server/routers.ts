@@ -68,6 +68,18 @@ async function extractPdfText(dataUrl: string) {
   }
 }
 
+async function renderPdfPages(dataUrl: string) {
+  const match = dataUrl.match(/^data:application\/pdf;base64,(.+)$/s);
+  if (!match) return [];
+  const parser = new PDFParse({ data: Buffer.from(match[1], "base64") });
+  try {
+    const screenshots = await parser.getScreenshot({ first: 5, desiredWidth: 1600, imageDataUrl: true, imageBuffer: false });
+    return screenshots.pages.map((page) => page.dataUrl).filter(Boolean);
+  } finally {
+    await parser.destroy();
+  }
+}
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -90,6 +102,7 @@ export const appRouter = router({
             if (hasUsefulFields(extracted)) return extracted;
           }
         }
+        const pdfPageImages = input.mimeType === "application/pdf" ? await renderPdfPages(input.imageUrl).catch(() => []) : [];
         const response = await invokeLLM({
           model: "gemini-3-flash-preview",
           messages: [
@@ -104,9 +117,11 @@ export const appRouter = router({
                   type: "text",
                   text: "استخرج اسم المورد أو البائع، اسم العميل أو الشركة المستلمة، الرقم الضريبي، رقم الفاتورة، التاريخ، اسم المشروع أو موقع العمل، المجموع قبل الضريبة، ضريبة القيمة المضافة، الإجمالي بعد الضريبة، العملة، وتصنيف الفاتورة مثل مشتريات أو مواد بناء أو خدمات أو نقل، مع نسبة ثقة إجمالية من 0 إلى 1.",
                 },
-                input.mimeType === "application/pdf"
-                  ? { type: "file_url", file_url: { url: input.imageUrl, mime_type: input.mimeType } }
-                  : { type: "image_url", image_url: { url: input.imageUrl, detail: "high" } },
+                ...(pdfPageImages.length > 0
+                  ? pdfPageImages.map((url) => ({ type: "image_url" as const, image_url: { url, detail: "high" as const } }))
+                  : [input.mimeType === "application/pdf"
+                    ? { type: "file_url" as const, file_url: { url: input.imageUrl, mime_type: input.mimeType } }
+                    : { type: "image_url" as const, image_url: { url: input.imageUrl, detail: "high" as const } }]),
               ],
             },
           ],
