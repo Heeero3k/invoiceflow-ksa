@@ -8,6 +8,7 @@ import { useColors } from "@/hooks/use-colors";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate, formatSar, useInvoices, type Invoice } from "@/lib/invoice-context";
 import { startOAuthLogin } from "@/constants/oauth";
+import { InvoiceBannerAd } from "@/components/invoice-banner-ad";
 
 export default function HomeScreen() {
   const colors = useColors();
@@ -75,6 +76,8 @@ export default function HomeScreen() {
                 </View>
               ))}
             </View>
+
+            <InvoiceBannerAd />
 
             <View style={styles.sectionHeader}>
               <View><Text style={[styles.sectionTitle, { color: colors.foreground }]}>آخر الفواتير</Text><Text style={[styles.sectionSubtitle, { color: colors.muted }]}>{pending ? `${pending} بانتظار المراجعة` : "كل شيء مرتب"}</Text></View>
