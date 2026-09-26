@@ -1,4 +1,5 @@
 import { Linking, Platform } from "react-native";
+import * as ExpoLinking from "expo-linking";
 import { getApiBaseUrl } from "@/constants/oauth";
 import * as Auth from "@/lib/_core/auth";
 import type { Invoice } from "@/lib/invoice-context";
@@ -26,7 +27,7 @@ export function invoicesToSheetRows(invoices: Invoice[]) {
 export async function connectGoogleSheets() {
   const returnTo = Platform.OS === "web" && typeof window !== "undefined"
     ? `${window.location.origin}/settings?sheets=connected`
-    : "invoiceflow://settings?sheets=connected";
+    : ExpoLinking.createURL("/settings", { scheme: "manusinvoiceflowksa" });
   const { url } = await apiJson<{ url: string }>(`/api/google/sheets/connect?returnTo=${encodeURIComponent(returnTo)}`);
   await Linking.openURL(url);
 }

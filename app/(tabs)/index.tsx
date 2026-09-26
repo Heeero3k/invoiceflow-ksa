@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
@@ -17,6 +17,14 @@ export default function HomeScreen() {
   const total = useMemo(() => invoices.reduce((sum, invoice) => sum + invoice.total, 0), [invoices]);
   const vat = useMemo(() => invoices.reduce((sum, invoice) => sum + invoice.vat, 0), [invoices]);
   const pending = invoices.filter((invoice) => invoice.status === "needs-review").length;
+
+  const login = async () => {
+    try {
+      await startOAuthLogin();
+    } catch (error) {
+      Alert.alert("تسجيل الدخول غير متاح", error instanceof Error ? error.message : "تعذر بدء تسجيل الدخول.");
+    }
+  };
 
   const statCards = [
     { label: "فواتير هذا الشهر", value: String(invoices.length), icon: "doc.text.fill" as const, tone: colors.primary },
@@ -45,7 +53,7 @@ export default function HomeScreen() {
             </View>
 
             {!isAuthenticated && (
-              <Pressable onPress={startOAuthLogin} style={({ pressed }) => [styles.signInBanner, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
+              <Pressable onPress={login} style={({ pressed }) => [styles.signInBanner, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
                 <View style={[styles.googleBadge, { backgroundColor: "#EAF4F1" }]}><Text style={styles.googleText}>G</Text></View>
                 <View style={styles.flexOne}><Text style={[styles.bannerTitle, { color: colors.foreground }]}>سجّل الدخول بحساب Google</Text><Text style={[styles.bannerCopy, { color: colors.muted }]}>لمزامنة الفواتير وحماية بياناتك</Text></View>
                 <IconSymbol name="chevron.right" size={20} color={colors.muted} />

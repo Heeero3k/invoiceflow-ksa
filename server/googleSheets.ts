@@ -71,7 +71,7 @@ function safeReturnTo(value: unknown, req: Request) {
       // Fall back to the app deep link for malformed return URLs.
     }
   }
-  return "invoiceflow://settings?sheets=connected";
+  return "manusinvoiceflowksa://settings?sheets=connected";
 }
 
 export function registerGoogleSheetsRoutes(app: Express) {
