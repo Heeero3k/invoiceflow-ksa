@@ -8,7 +8,7 @@
 |---|---|
 | Expo project | `@hero2011/invoiceflow-ksa` |
 | Android package | `com.app.invoiceflowksa` |
-| API production URL | `https://invflowksa-xluebmmk.manus.space` |
+| API production URL | `https://invoiceflow-ksa.onrender.com` |
 | EAS production variable | `EXPO_PUBLIC_API_BASE_URL` مضاف |
 | AdMob App ID | موجود في `app.config.ts` |
 | AdMob banner | موجود في التطبيق |
@@ -17,7 +17,7 @@
 | Google Login | يحتاج قيم OAuth العامة الحقيقية قبل إعادة البناء |
 | Google Sheets | يحتاج Google OAuth Web Client ومتغيرات الخادم السرية |
 
-> فتح `https://invflowksa-xluebmmk.manus.space/` مباشرة قد يعرض `Cannot GET /`. هذا طبيعي لأن العنوان خادم API وليس صفحة ويب.
+> فتح `https://invoiceflow-ksa.onrender.com/` مباشرة قد يعرض `Cannot GET /`. هذا طبيعي لأن العنوان خادم API وليس صفحة ويب.
 
 ---
 
@@ -53,7 +53,7 @@
    ```
 5. تعيد Google المستخدم إلى:
    ```text
-   https://invflowksa-xluebmmk.manus.space/api/google/sheets/callback
+   https://invoiceflow-ksa.onrender.com/api/google/sheets/callback
    ```
 6. الخادم يحفظ رمز التحديث مشفراً في قاعدة البيانات.
 7. يضغط المستخدم **تصدير إلى Google Sheets**.
@@ -81,7 +81,7 @@ Project Settings → Environment variables → Add variables
 المتغير المؤكد والمضاف حالياً:
 
 ```env
-EXPO_PUBLIC_API_BASE_URL=https://invflowksa-xluebmmk.manus.space
+EXPO_PUBLIC_API_BASE_URL=https://invoiceflow-ksa.onrender.com
 ```
 
 يجب إضافة المتغيرات التالية بعد الحصول على قيمها الحقيقية من إعدادات Manus/OAuth:
@@ -111,7 +111,7 @@ EXPO_PUBLIC_OWNER_NAME=<اسم المالك الحقيقي>
 ```env
 GOOGLE_CLIENT_ID=<Google OAuth Web Client ID>
 GOOGLE_CLIENT_SECRET=<Google OAuth Web Client Secret>
-GOOGLE_REDIRECT_URI=https://invflowksa-xluebmmk.manus.space/api/google/sheets/callback
+GOOGLE_REDIRECT_URI=https://invoiceflow-ksa.onrender.com/api/google/sheets/callback
 JWT_SECRET=<سر طويل وعشوائي وثابت>
 DATABASE_URL=<رابط قاعدة البيانات>
 OAUTH_SERVER_URL=<رابط OAuth Server الحقيقي>
@@ -147,7 +147,7 @@ OWNER_OPEN_ID=<معرّف المالك الحقيقي>
    ```
 6. أضف Authorized redirect URI حرفياً:
    ```text
-   https://invflowksa-xluebmmk.manus.space/api/google/sheets/callback
+   https://invoiceflow-ksa.onrender.com/api/google/sheets/callback
    ```
 7. انسخ `Client ID` و`Client Secret` إلى متغيرات الخادم فقط.
 
@@ -167,7 +167,7 @@ OWNER_OPEN_ID=<معرّف المالك الحقيقي>
 نفّذ من جهاز التطوير:
 
 ```bash
-curl -i https://invflowksa-xluebmmk.manus.space/api/google/sheets/status
+curl -i https://invoiceflow-ksa.onrender.com/api/google/sheets/status
 ```
 
 النتيجة المتوقعة قبل تسجيل الدخول:
@@ -187,7 +187,7 @@ HTTP 401
 أما:
 
 ```bash
-curl -i https://invflowksa-xluebmmk.manus.space/
+curl -i https://invoiceflow-ksa.onrender.com/
 ```
 
 فقد يرجع:
@@ -205,7 +205,7 @@ Cannot GET /
 بعد توفير متغيرات OAuth العامة في ملف `.env` محلياً:
 
 ```env
-EXPO_PUBLIC_API_BASE_URL=https://invflowksa-xluebmmk.manus.space
+EXPO_PUBLIC_API_BASE_URL=https://invoiceflow-ksa.onrender.com
 EXPO_PUBLIC_OAUTH_PORTAL_URL=<القيمة الحقيقية>
 EXPO_PUBLIC_OAUTH_SERVER_URL=<القيمة الحقيقية>
 EXPO_PUBLIC_APP_ID=<القيمة الحقيقية>
