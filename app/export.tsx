@@ -39,8 +39,10 @@ export default function ExportScreen() {
   const [format, setFormat] = useState<ExportFormat>("xlsx");
   const [includeUnapproved, setIncludeUnapproved] = useState(true);
   const [share, setShare] = useState(true);
-  const [cloud, setCloud] = useState(isSignedIn);
+  const [toDrive, setToDrive] = useState(false);
+  const [driveOriginals, setDriveOriginals] = useState(true);
   const [toSheets, setToSheets] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [sheetsStatus, setSheetsStatus] = useState<SheetsStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<(ExportResult & { count: number }) | null>(null);
@@ -51,12 +53,15 @@ export default function ExportScreen() {
       .status()
       .then((status) => {
         setSheetsStatus(status);
+        setToDrive(status.connected);
         setToSheets(status.connected);
       })
       .catch(() => undefined);
   }, [isSignedIn]);
 
+  const googleConnected = Boolean(sheetsStatus?.connected);
   const invoices = includeUnapproved ? scoped : scoped.filter((invoice) => invoice.status === "approved");
+  const withOriginals = invoices.filter((invoice) => invoice.localUri).length;
   const total = invoices.reduce((sum, invoice) => sum + invoice.total, 0);
 
   const start = async () => {
@@ -70,9 +75,11 @@ export default function ExportScreen() {
         format,
         language: exportLanguage,
         share,
-        cloud: cloud && isSignedIn,
-        googleSheets: toSheets && Boolean(sheetsStatus?.connected),
+        drive: toDrive && googleConnected,
+        driveOriginals,
+        googleSheets: toSheets && googleConnected,
         userId: user?.id ?? null,
+        onProgress: (done, totalFiles) => setProgress({ done, total: totalFiles }),
       });
       store.markExported(
         invoices.map((invoice) => invoice.id),
@@ -85,6 +92,7 @@ export default function ExportScreen() {
       notify(t("somethingWrong"), t(errorKey(error)));
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -103,18 +111,18 @@ export default function ExportScreen() {
           </Text>
         </View>
         <View style={{ gap: 10, marginTop: 28 }}>
-          {result.cloudUrl ? (
+          {result.driveUrl ? (
             <Card>
               <Row gap={10} align="flex-start">
-                <Icon name="cloud-check-outline" size={22} color={colors.accent} />
+                <Icon name="google-drive" size={22} color={colors.accent} />
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text variant="bodyStrong">{t("destCloud")}</Text>
+                  <Text variant="bodyStrong">{t("destDrive")}</Text>
                   <Text variant="caption" tone="muted">
-                    {t("exportDoneCloud")}
+                    {result.originalsUploaded ? t("exportDoneDriveOriginals", { n: result.originalsUploaded }) : t("exportDoneDrive")}
                   </Text>
                 </View>
               </Row>
-              <Button title={t("open")} icon="open-in-new" variant="secondary" size="md" style={{ marginTop: 12 }} onPress={() => void Linking.openURL(result.cloudUrl!)} />
+              <Button title={t("openDriveFolder")} icon="open-in-new" variant="secondary" size="md" style={{ marginTop: 12 }} onPress={() => void Linking.openURL(result.driveUrl!)} />
             </Card>
           ) : null}
           {result.sheetsUrl ? (
@@ -178,21 +186,24 @@ export default function ExportScreen() {
       <Card padded={false}>
         <ToggleRow icon="share-variant-outline" title={t("destShare")} hint={t("destShareHint")} value={share} onChange={setShare} />
         <ToggleRow
-          icon="cloud-upload-outline"
-          title={t("destCloud")}
-          hint={isSignedIn ? t("destCloudHint") : t("requiresSignIn")}
-          value={cloud && isSignedIn}
-          onChange={setCloud}
-          disabled={!isSignedIn}
-          onDisabledPress={isBackendConfigured ? () => router.push("/sign-in") : undefined}
+          icon="google-drive"
+          title={t("destDrive")}
+          hint={!isSignedIn ? t("requiresSignIn") : googleConnected ? t("destDriveHint") : t("googleNotConnected")}
+          value={toDrive && googleConnected}
+          onChange={setToDrive}
+          disabled={!googleConnected}
+          onDisabledPress={isSignedIn ? () => router.push("/exports") : isBackendConfigured ? () => router.push("/sign-in") : undefined}
         />
+        {toDrive && googleConnected && withOriginals > 0 ? (
+          <ToggleRow icon="image-multiple-outline" title={t("driveOriginals", { n: withOriginals })} hint={t("driveOriginalsHint")} value={driveOriginals} onChange={setDriveOriginals} />
+        ) : null}
         <ToggleRow
           icon="google-spreadsheet"
           title={t("destSheets")}
-          hint={!isSignedIn ? t("requiresSignIn") : sheetsStatus?.connected ? t("destSheetsHint") : t("sheetsNotConnected")}
-          value={toSheets && Boolean(sheetsStatus?.connected)}
+          hint={!isSignedIn ? t("requiresSignIn") : googleConnected ? t("destSheetsHint") : t("googleNotConnected")}
+          value={toSheets && googleConnected}
           onChange={setToSheets}
-          disabled={!sheetsStatus?.connected}
+          disabled={!googleConnected}
           onDisabledPress={isSignedIn ? () => router.push("/exports") : isBackendConfigured ? () => router.push("/sign-in") : undefined}
           last
         />
@@ -207,7 +218,14 @@ export default function ExportScreen() {
         </Pressable>
       ) : null}
 
-      <Button title={busy ? t("exporting") : t("exportNow")} icon="export-variant" loading={busy} disabled={!invoices.length || (!share && !cloud && !toSheets)} onPress={() => void start()} style={{ marginTop: 22 }} />
+      <Button
+        title={busy ? (progress && progress.total > 1 ? t("uploadingProgress", { done: progress.done, total: progress.total }) : t("exporting")) : t("exportNow")}
+        icon="export-variant"
+        loading={busy && !progress}
+        disabled={busy || !invoices.length || (!share && !(toDrive && googleConnected) && !(toSheets && googleConnected))}
+        onPress={() => void start()}
+        style={{ marginTop: 22 }}
+      />
     </ScrollScreen>
   );
 }

@@ -20,7 +20,7 @@ InvoiceFlow مساعد محاسبي مصمم للمحاسبين وشركات ا�
 • Excel احترافي: سجل فواتير منسق مع ملخصات حسب التصنيف والمورد والمشروع.
 • CSV لبرامج المحاسبة: متوافق مع قيود ودفترة وZoho Books وQuickBooks وXero.
 • Google Sheets: إضافة الفواتير تلقائياً إلى جدول واحد منظم.
-• السحابة: احفظ ملفاتك وافتحها من الكمبيوتر برابط تحميل.
+• Google Drive: سجّل بحساب Google واحفظ ملفات Excel وصور الفواتير في Drive الخاص بك، وافتحها من الكمبيوتر أو برنامجك المحاسبي.
 • عربي وإنجليزي، وضع فاتح وداكن.
 
 ملاحظة: قراءة رمز QR بنيوية وليست تحققاً رسمياً من هيئة الزكاة والضريبة والجمارك. المراجعة البشرية مطلوبة دائماً.
@@ -43,7 +43,7 @@ Turn stacks of paper invoices into a clean Excel register in minutes.
 • Formatted Excel with summaries by category, vendor and project.
 • Accounting CSV for Qoyod, Daftra, Zoho Books, QuickBooks and Xero.
 • Google Sheets: append invoices to one organized sheet automatically.
-• Cloud: keep your files and open them on your computer via a download link.
+• Google Drive: sign in with Google and keep Excel files and invoice images in your own Drive — open them on your computer or in your accounting software.
 • Arabic & English, light & dark.
 
 QR reading is structural, not an official ZATCA verification. Human review is always required.

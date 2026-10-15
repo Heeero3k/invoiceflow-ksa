@@ -29,9 +29,9 @@
 
 عند تسجيل الدخول تُحفظ الفواتير والدفعات وملفات Excel المصدّرة، والصور الأصلية إذا فعّلت خيار "حفظ الصور الأصلية"، في قاعدة بيانات وتخزين خاصين على Supabase. كل حساب معزول بسياسات أمان على مستوى الصفوف (Row Level Security)، ولا يستطيع أي مستخدم آخر الوصول إليها. روابط تحميل الملفات مؤقتة وتنتهي خلال 7 أيام.
 
-## 5. Google Sheets
+## 5. Google Drive وGoogle Sheets
 
-عند ربط Google Sheets نطلب صلاحيتي `spreadsheets` و`drive.file` فقط لإنشاء جدول InvoiceFlow والإضافة إليه. يُحفظ رمز التحديث (refresh token) مشفّراً بمعيار AES-256-GCM على الخادم ولا يُرسل إلى جهازك. يمكنك إلغاء الربط من داخل التطبيق أو من إعدادات حسابك في Google.
+عند تسجيل الدخول بحساب Google أو ربطه، نطلب صلاحيتين فقط: `drive.file` لإنشاء مجلد "InvoiceFlow KSA" في Google Drive الخاص بك وحفظ ملفات Excel وصور الفواتير التي تختار تصديرها (لا يستطيع التطبيق رؤية أي ملفات أخرى في حسابك)، و`spreadsheets` لإنشاء جدول سجل الفواتير والإضافة إليه. تُرفع الملفات من جهازك إلى Google مباشرة، وتبقى ملكاً لك في حسابك. يُحفظ رمز التحديث (refresh token) مشفّراً بمعيار AES-256-GCM على الخادم ولا يُرسل إلى جهازك. يمكنك إلغاء الربط من داخل التطبيق أو من إعدادات حسابك في Google.
 
 ## 6. الإعلانات
 
@@ -68,4 +68,4 @@
 
 ## Privacy Policy (English summary)
 
-InvoiceFlow KSA processes invoice images/PDFs and the extracted invoice fields to organize and export them. Guest mode keeps invoices on the device. When you request a smart read, the file is sent over HTTPS to our backend (Supabase) and to Anthropic's Claude for extraction; it is not used for model training. Signed-in users' invoices, exports and (optionally) original images are stored in a private, per-user Supabase database and storage protected by Row Level Security. Google Sheets access (spreadsheets + drive.file scopes) is optional; the refresh token is stored encrypted server-side. Ads are served by Google AdMob as non-personalized ads only, never during capture or review. We do not sell data. You can delete invoices, local data, or your entire account (Settings → Delete account) at any time. Contact: ibrahim.aramed@gmail.com.
+InvoiceFlow KSA processes invoice images/PDFs and the extracted invoice fields to organize and export them. Guest mode keeps invoices on the device. When you request a smart read, the file is sent over HTTPS to our backend (Supabase) and to Anthropic's Claude for extraction; it is not used for model training. Signed-in users' invoices, exports and (optionally) original images are stored in a private, per-user Supabase database and storage protected by Row Level Security. Signing in with Google (or connecting it later) grants drive.file — the app can only see files it creates, in an "InvoiceFlow KSA" folder in your own Google Drive where your Excel exports and original invoice images are saved — and spreadsheets, for your invoice log sheet. Files upload directly from your device to your Google account; the refresh token is stored encrypted server-side. Ads are served by Google AdMob as non-personalized ads only, never during capture or review. We do not sell data. You can delete invoices, local data, or your entire account (Settings → Delete account) at any time. Contact: ibrahim.aramed@gmail.com.

@@ -3,10 +3,15 @@ import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Platform } from "react-native";
-import { ApiError, deleteAccount as deleteAccountApi } from "./api";
+import { ApiError, deleteAccount as deleteAccountApi, sheets } from "./api";
 import { isBackendConfigured, supabase } from "./supabase";
 
 WebBrowser.maybeCompleteAuthSession();
+
+// Signing in with Google also grants access to the user's own Drive (files this
+// app creates) and Sheets, so invoices and Excel files land in their account.
+const GOOGLE_SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets";
+const GOOGLE_QUERY = { access_type: "offline", prompt: "consent" };
 
 type AuthValue = {
   ready: boolean;
@@ -35,6 +40,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(!isBackendConfigured);
   const anonymousPromise = useRef<Promise<Session> | null>(null);
+  const storedTokens = useRef(new Set<string>());
+
+  // Google returns a refresh token only right after consent; hand it to the
+  // backend once so Drive/Sheets work without a second permission screen.
+  const captureGoogleToken = useCallback((next: Session | null) => {
+    const token = next?.provider_refresh_token;
+    if (!token || storedTokens.current.has(token) || next?.user.app_metadata?.provider !== "google") return;
+    storedTokens.current.add(token);
+    sheets.storeToken(token).catch((error) => console.warn("[auth] could not link Google Drive", error));
+  }, []);
 
   useEffect(() => {
     if (!isBackendConfigured) return;
@@ -42,9 +57,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .getSession()
       .then(({ data }) => setSession(data.session))
       .finally(() => setReady(true));
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
+    const { data } = supabase.auth.onAuthStateChange((_event, next) => {
+      setSession(next);
+      // Defer: Supabase forbids awaiting other auth calls inside this callback.
+      setTimeout(() => captureGoogleToken(next), 0);
+    });
     return () => data.subscription.unsubscribe();
-  }, []);
+  }, [captureGoogleToken]);
 
   const ensureSession = useCallback(async () => {
     if (!isBackendConfigured) throw new ApiError("not_configured");
@@ -61,12 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithProvider = useCallback(async (provider: "google" | "apple") => {
     if (!isBackendConfigured) throw new ApiError("not_configured");
     const redirectTo = redirectUrl();
+    const extra = provider === "google" ? { scopes: GOOGLE_SCOPES, queryParams: GOOGLE_QUERY } : {};
     if (Platform.OS === "web") {
-      const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo } });
+      const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo, ...extra } });
       if (error) throw error;
       return false; // The page navigates away.
     }
-    const { data, error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo, skipBrowserRedirect: true } });
+    const { data, error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo, skipBrowserRedirect: true, ...extra } });
     if (error || !data.url) throw error ?? new Error("No OAuth URL");
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
     if (result.type !== "success") return false;
