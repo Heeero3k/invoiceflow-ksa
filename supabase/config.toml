@@ -1,0 +1,18 @@
+# Minimal Supabase CLI config for InvoiceFlow KSA.
+# Run `supabase link --project-ref <ref>` once, then `pnpm supabase:push`
+# and `pnpm supabase:deploy`.
+project_id = "invoiceflow-ksa"
+
+[functions.extract-invoice]
+verify_jwt = true
+
+[functions.sheets]
+verify_jwt = true
+
+# Google redirects the browser here without a Supabase JWT; the request is
+# authenticated by the signed `state` parameter instead.
+[functions.sheets-callback]
+verify_jwt = false
+
+[functions.delete-account]
+verify_jwt = true

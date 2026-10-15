@@ -1,90 +1,162 @@
+import Constants from "expo-constants";
+import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
-import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
+import { Linking, Switch, View } from "react-native";
+import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
+import { Card, Divider, ListRow, PageHeader, ProgressBar, Row, ScrollScreen, Segmented, SectionTitle } from "@/components/ui/layout";
+import { Text } from "@/components/ui/text";
+import { errorKey } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { confirmAction, notify } from "@/lib/dialogs";
+import { useI18n } from "@/lib/i18n";
+import { usePreferences, type Language, type ThemeMode } from "@/lib/preferences";
+import { useStore } from "@/lib/store";
+import { isBackendConfigured, supabase } from "@/lib/supabase";
+import { useTheme } from "@/lib/theme";
 
-import { ScreenContainer } from "@/components/screen-container";
-import { IconSymbol } from "@/components/ui/icon-symbol";
-import { useAuth } from "@/hooks/use-auth";
-import { useColors } from "@/hooks/use-colors";
-import { formatSar, useInvoices } from "@/lib/invoice-context";
-import { startOAuthLogin } from "@/constants/oauth";
-import { toInvoiceCsv } from "@/shared/invoice-utils";
-import { connectGoogleSheets, exportInvoicesToGoogleSheets, getGoogleSheetsStatus } from "@/lib/google-sheets";
+const PRIVACY_URL = "https://github.com/Heeero3k/invoiceflow-ksa/blob/main/PRIVACY_POLICY.md";
 
 export default function SettingsScreen() {
-  const colors = useColors();
-  const { invoices, clearInvoices } = useInvoices();
-  const { user, isAuthenticated, logout } = useAuth();
-  const [busy, setBusy] = useState(false);
-  const [sheetsConnected, setSheetsConnected] = useState(false);
-  const [spreadsheetUrl, setSpreadsheetUrl] = useState<string | null>(null);
-
-  const login = async () => {
-    try {
-      await startOAuthLogin();
-    } catch (error) {
-      Alert.alert("تسجيل الدخول غير متاح", error instanceof Error ? error.message : "تعذر بدء تسجيل الدخول.");
-    }
-  };
+  const { colors } = useTheme();
+  const { t, formatDate, formatTime } = useI18n();
+  const prefs = usePreferences();
+  const auth = useAuth();
+  const store = useStore();
+  const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      setSheetsConnected(false);
-      setSpreadsheetUrl(null);
-      return;
-    }
-    getGoogleSheetsStatus().then((status) => {
-      setSheetsConnected(status.connected);
-      setSpreadsheetUrl(status.spreadsheetUrl);
-    }).catch(() => undefined);
-  }, [isAuthenticated]);
+    if (!auth.isSignedIn || !auth.user) return;
+    const month = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" }).slice(0, 7);
+    Promise.all([
+      supabase.from("usage_counters").select("scans").eq("month", month).maybeSingle(),
+      supabase.from("profiles").select("plan").maybeSingle(),
+    ])
+      .then(([counter, profile]) => setUsage({ used: counter.data?.scans ?? 0, limit: profile.data?.plan === "pro" ? 2000 : 40 }))
+      .catch(() => undefined);
+  }, [auth.isSignedIn, auth.user]);
 
-  const exportCsv = async () => {
-    setBusy(true);
-    try {
-      const csv = toInvoiceCsv(invoices);
-      if (Platform.OS === "web") {
-        await Share.share({ message: csv, title: "InvoiceFlow KSA CSV" });
-      } else {
-        const uri = `${FileSystem.documentDirectory}invoiceflow-${Date.now()}.csv`;
-        await FileSystem.writeAsStringAsync(uri, `\uFEFF${csv}`);
-        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { mimeType: "text/csv", dialogTitle: "تصدير الفواتير" });
-      }
-    } catch {
-      Alert.alert("تعذر التصدير", "حاول مرة أخرى أو تحقق من صلاحيات مشاركة الملفات.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  return (
+    <ScrollScreen>
+      <PageHeader title={t("settingsTitle")} />
 
-  const connectSheets = async () => {
-    try {
-      await connectGoogleSheets();
-    } catch (error) {
-      Alert.alert("تعذر ربط Google Sheets", error instanceof Error ? error.message : "سجّل الدخول أولاً ثم حاول مرة أخرى.");
-    }
-  };
+      <SectionTitle title={t("account")} />
+      <Card>
+        <Row gap={12}>
+          <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" }}>
+            {auth.displayName ? <Text variant="heading" tone="accent">{auth.displayName.charAt(0).toUpperCase()}</Text> : <Icon name="account-outline" size={24} color={colors.accent} />}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text variant="subheading">{auth.isSignedIn ? (auth.displayName ?? auth.email) : t("guestMode")}</Text>
+            <Text variant="caption" tone="muted">
+              {auth.isSignedIn ? auth.email : t("guestModeBody")}
+            </Text>
+          </View>
+        </Row>
+        {auth.isSignedIn ? (
+          <>
+            {usage ? (
+              <View style={{ marginTop: 16, gap: 6 }}>
+                <Row style={{ justifyContent: "space-between" }}>
+                  <Text variant="label" tone="muted">
+                    {t("usage")}
+                  </Text>
+                  <Text variant="label">{t("usageScans", { used: usage.used, limit: usage.limit })}</Text>
+                </Row>
+                <ProgressBar value={usage.used / usage.limit} />
+              </View>
+            ) : null}
+            <Row gap={8} style={{ marginTop: 16 }}>
+              <Button title={t("syncNow")} icon="sync" variant="secondary" size="md" style={{ flex: 1 }} loading={store.syncing} onPress={() => void store.syncNow()} />
+              <Button title={t("signOut")} variant="secondary" size="md" style={{ flex: 1 }} onPress={() => confirmAction(t("signOutConfirm"), t("signOut"), t("cancel"), () => void auth.signOut())} />
+            </Row>
+            <Text variant="caption" tone="faint" align="center" style={{ marginTop: 8 }}>
+              {store.lastSyncedAt ? t("lastSynced", { time: `${formatDate(store.lastSyncedAt)} ${formatTime(store.lastSyncedAt)}` }) : t("notSynced")}
+            </Text>
+          </>
+        ) : isBackendConfigured ? (
+          <Button title={t("signIn")} icon="login" style={{ marginTop: 16 }} onPress={() => router.push("/sign-in")} />
+        ) : (
+          <Text variant="caption" tone="warning" style={{ marginTop: 12 }}>
+            {t("backendMissing")}
+          </Text>
+        )}
+      </Card>
 
-  const exportToSheets = async () => {
-    setBusy(true);
-    try {
-      const result = await exportInvoicesToGoogleSheets(invoices);
-      setSheetsConnected(true);
-      setSpreadsheetUrl(result.spreadsheetUrl);
-      Alert.alert("تم التصدير تلقائياً", "أضيفت الفواتير إلى جدول Google Sheets المرتبط.", [{ text: "فتح الجدول", onPress: () => Linking.openURL(result.spreadsheetUrl) }, { text: "حسناً" }]);
-    } catch (error) {
-      Alert.alert("تعذر التصدير إلى Google Sheets", "اربط حساب Google أولاً ثم أعد المحاولة.");
-    } finally {
-      setBusy(false);
-    }
-  };
+      <SectionTitle title={t("preferences")} />
+      <Card>
+        <Text variant="label" tone="muted" style={{ marginBottom: 8 }}>
+          {t("language")}
+        </Text>
+        <Segmented<Language>
+          value={prefs.language}
+          onChange={(language) => prefs.update({ language, exportLanguage: language })}
+          options={[
+            { value: "ar", label: "العربية" },
+            { value: "en", label: "English" },
+          ]}
+        />
+        <Text variant="label" tone="muted" style={{ marginTop: 16, marginBottom: 8 }}>
+          {t("appearance")}
+        </Text>
+        <Segmented<ThemeMode>
+          value={prefs.themeMode}
+          onChange={(themeMode) => prefs.update({ themeMode })}
+          options={[
+            { value: "system", label: t("themeSystem") },
+            { value: "light", label: t("themeLight") },
+            { value: "dark", label: t("themeDark") },
+          ]}
+        />
+        {auth.isSignedIn ? (
+          <Row gap={12} style={{ marginTop: 18 }}>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyStrong">{t("keepOriginals")}</Text>
+              <Text variant="caption" tone="muted">
+                {t("keepOriginalsHint")}
+              </Text>
+            </View>
+            <Switch value={prefs.keepOriginals} onValueChange={(keepOriginals) => prefs.update({ keepOriginals })} trackColor={{ true: colors.accent, false: colors.borderStrong }} thumbColor="#FFFFFF" />
+          </Row>
+        ) : null}
+      </Card>
 
-  const confirmClear = () => Alert.alert("حذف السجل المحلي؟", "سيتم حذف الفواتير المحفوظة على هذا الجهاز فقط.", [{ text: "إلغاء", style: "cancel" }, { text: "حذف", style: "destructive", onPress: clearInvoices }]);
+      <SectionTitle title={t("dataPrivacy")} />
+      <Card padded={false}>
+        <ListRow icon="shield-lock-outline" title={t("privacyPolicy")} onPress={() => void Linking.openURL(PRIVACY_URL)} />
+        <Divider />
+        <ListRow
+          icon="cellphone-remove"
+          iconTone="neutral"
+          title={t("clearLocal")}
+          onPress={() => confirmAction(t("clearLocalConfirm"), t("delete"), t("cancel"), () => void store.clearLocal())}
+        />
+        {auth.isSignedIn ? (
+          <>
+            <Divider />
+            <ListRow
+              icon="account-remove-outline"
+              danger
+              title={t("deleteAccount")}
+              onPress={() =>
+                confirmAction(t("deleteAccountConfirm"), t("deleteAccount"), t("cancel"), async () => {
+                  try {
+                    await auth.deleteAccount();
+                    await store.clearLocal();
+                    notify(t("accountDeleted"));
+                  } catch (error) {
+                    notify(t("somethingWrong"), t(errorKey(error)));
+                  }
+                })
+              }
+            />
+          </>
+        ) : null}
+      </Card>
 
-  return <ScreenContainer className="px-5 pt-4" edges={["top", "left", "right"]}><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}><Text style={[styles.kicker, { color: colors.primary }]}>مساحتك الآمنة</Text><Text style={[styles.title, { color: colors.foreground }]}>الإعدادات</Text><Text style={[styles.subtitle, { color: colors.muted }]}>تحكم في الحساب، التصدير، وخصوصية الفواتير.</Text><View style={[styles.profile, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={[styles.profileAvatar, { backgroundColor: colors.primary }]}><Text style={styles.profileLetter}>{user?.name?.charAt(0) ?? "م"}</Text></View><View style={styles.profileBody}><Text style={[styles.profileName, { color: colors.foreground }]}>{user?.name ?? "وضع الضيف"}</Text><Text style={[styles.profileEmail, { color: colors.muted }]}>{user?.email ?? "سجّل الدخول لحفظ السجل سحابياً"}</Text></View>{isAuthenticated ? <Pressable onPress={logout}><Text style={[styles.link, { color: colors.primary }]}>خروج</Text></Pressable> : <Pressable onPress={login}><Text style={[styles.link, { color: colors.primary }]}>دخول</Text></Pressable>}</View><Text style={[styles.sectionTitle, { color: colors.foreground }]}>التصدير والمزامنة</Text><ActionRow icon="tablecells" title="تصدير إلى Excel / CSV" copy={`${invoices.length} فاتورة · ${formatSar(invoices.reduce((sum, item) => sum + item.total, 0))}`} colors={colors} onPress={exportCsv} disabled={busy} /><ActionRow icon="icloud.and.arrow.up.fill" title={sheetsConnected ? "تصدير تلقائي إلى Google Sheets" : "ربط Google Sheets"} copy={sheetsConnected ? "الحساب مرتبط؛ اضغط لإضافة الفواتير الآن" : isAuthenticated ? "OAuth آمن ثم إنشاء جدول الفواتير تلقائياً" : "سجّل الدخول بحساب Google أولاً"} colors={colors} onPress={isAuthenticated ? (sheetsConnected ? exportToSheets : connectSheets) : login} disabled={busy} /><ActionRow icon="arrow.up.right.square" title="فتح جدول Google المرتبط" copy={spreadsheetUrl ? "عرض آخر جدول تم التصدير إليه" : isAuthenticated ? "سيظهر الرابط بعد أول تصدير" : "سجّل الدخول بحساب Google أولاً"} colors={colors} onPress={() => !isAuthenticated ? login() : spreadsheetUrl ? Linking.openURL(spreadsheetUrl) : connectSheets()} disabled={busy} /><Text style={[styles.sectionTitle, { color: colors.foreground }]}>الخصوصية</Text><View style={[styles.privacy, { backgroundColor: "#E8F6F1" }]}><IconSymbol name="lock.fill" size={20} color={colors.primary} /><View style={styles.flex}><Text style={[styles.privacyTitle, { color: colors.foreground }]}>بياناتك تحت سيطرتك</Text><Text style={[styles.privacyCopy, { color: colors.muted }]}>المعالجة تبدأ محلياً، ولا يتم إرسال الصورة لخادم الذكاء الاصطناعي إلا عند طلب التحليل.</Text></View></View><Pressable onPress={confirmClear} style={({ pressed }) => [styles.deleteButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.deleteText, { color: colors.error }]}>حذف الفواتير من هذا الجهاز</Text></Pressable><Text style={[styles.version, { color: colors.muted }]}>InvoiceFlow KSA · الإصدار 1.0.1</Text></ScrollView></ScreenContainer>;
+      <Text variant="caption" tone="faint" align="center" style={{ marginTop: 24 }}>
+        InvoiceFlow KSA · {t("version", { v: Constants.expoConfig?.version ?? "" })}
+      </Text>
+    </ScrollScreen>
+  );
 }
-
-function ActionRow({ icon, title, copy, colors, onPress, disabled }: { icon: "tablecells" | "icloud.and.arrow.up.fill" | "arrow.up.right.square"; title: string; copy: string; colors: ReturnType<typeof useColors>; onPress: () => void; disabled?: boolean }) { return <Pressable onPress={onPress} disabled={disabled} style={({ pressed }) => [styles.action, { backgroundColor: colors.surface, borderColor: colors.border }, disabled && { opacity: 0.55 }, pressed && styles.pressed]}><View style={[styles.actionIcon, { backgroundColor: "#E8F6F1" }]}><IconSymbol name={icon} color={colors.primary} size={20} /></View><View style={styles.flex}><Text style={[styles.actionTitle, { color: colors.foreground }]}>{title}</Text><Text style={[styles.actionCopy, { color: colors.muted }]}>{copy}</Text></View><IconSymbol name="chevron.right" color={colors.muted} size={19} /></Pressable>; }
-
-const styles = StyleSheet.create({ content: { paddingBottom: 34 }, kicker: { fontSize: 11, fontWeight: "800", letterSpacing: 1.1 }, title: { fontSize: 28, fontWeight: "800", marginTop: 3 }, subtitle: { fontSize: 12, lineHeight: 19, marginTop: 4, marginBottom: 18 }, profile: { borderWidth: 1, borderRadius: 18, padding: 14, flexDirection: "row", alignItems: "center", marginBottom: 24 }, profileAvatar: { width: 45, height: 45, borderRadius: 15, alignItems: "center", justifyContent: "center" }, profileLetter: { color: "#FFFFFF", fontSize: 19, fontWeight: "800" }, profileBody: { flex: 1, marginLeft: 11 }, profileName: { fontSize: 14, fontWeight: "800" }, profileEmail: { fontSize: 10, marginTop: 4 }, link: { fontSize: 12, fontWeight: "800" }, sectionTitle: { fontSize: 16, fontWeight: "800", marginBottom: 10, marginTop: 2 }, action: { borderWidth: 1, borderRadius: 17, padding: 12, flexDirection: "row", alignItems: "center", gap: 11, marginBottom: 9 }, actionIcon: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center" }, flex: { flex: 1 }, actionTitle: { fontSize: 13, fontWeight: "800" }, actionCopy: { fontSize: 10, marginTop: 5 }, privacy: { borderRadius: 16, padding: 14, flexDirection: "row", gap: 10, alignItems: "flex-start", marginBottom: 14 }, privacyTitle: { fontSize: 13, fontWeight: "800" }, privacyCopy: { fontSize: 11, lineHeight: 17, marginTop: 5 }, deleteButton: { borderWidth: 1, borderRadius: 14, height: 46, alignItems: "center", justifyContent: "center" }, deleteText: { fontSize: 12, fontWeight: "800" }, version: { textAlign: "center", fontSize: 10, marginTop: 22 }, pressed: { opacity: 0.8, transform: [{ scale: 0.98 }] } });

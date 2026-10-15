@@ -1,72 +1,194 @@
-import { useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
+import { useMemo, useState } from "react";
+import { FlatList, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { InlineBanner } from "@/components/ads/banner";
+import { BatchCard, InvoiceRow } from "@/components/invoice-row";
+import { Button, IconButton } from "@/components/ui/button";
+import { ChipScroller, Field } from "@/components/ui/field";
+import { EmptyState, PageHeader, Row, Screen, Segmented } from "@/components/ui/layout";
+import { Text } from "@/components/ui/text";
+import { confirmAction } from "@/lib/dialogs";
+import { useI18n } from "@/lib/i18n";
+import { setExportSelection } from "@/lib/selection";
+import { useStore } from "@/lib/store";
+import { useTheme } from "@/lib/theme";
+import { CATEGORY_KEYS, CATEGORY_LABELS, type CategoryKey } from "@/shared/invoice";
 
-import { ScreenContainer } from "@/components/screen-container";
-import { IconSymbol } from "@/components/ui/icon-symbol";
-import { useColors } from "@/hooks/use-colors";
-import { formatDate, formatSar, useInvoices, type Invoice } from "@/lib/invoice-context";
+type StatusFilter = "all" | "needs-review" | "approved";
 
 export default function InvoicesScreen() {
-  const colors = useColors();
-  const { invoices } = useInvoices();
+  const { colors } = useTheme();
+  const { t, language } = useI18n();
+  const insets = useSafeAreaInsets();
+  const { invoices, batches, jobs, approveInvoices, deleteInvoices, addManualInvoice } = useStore();
+  const [view, setView] = useState<"invoices" | "batches">("invoices");
   const [query, setQuery] = useState("");
-  const filtered = useMemo(() => invoices.filter((invoice) => `${invoice.vendorName} ${invoice.invoiceNumber} ${invoice.projectName}`.toLowerCase().includes(query.toLowerCase())), [invoices, query]);
-  const reviewed = invoices.filter((invoice) => invoice.status === "reviewed").length;
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [category, setCategory] = useState<CategoryKey | "all">("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const selecting = selected.size > 0;
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return invoices.filter((invoice) => {
+      if (status !== "all" && invoice.status !== status) return false;
+      if (category !== "all" && invoice.category !== category) return false;
+      if (!q) return true;
+      return [invoice.vendorName, invoice.invoiceNumber, invoice.projectName, invoice.vendorTaxId, invoice.notes].some((value) => value.toLowerCase().includes(q));
+    });
+  }, [category, invoices, query, status]);
+
+  const usedCategories = useMemo(() => CATEGORY_KEYS.filter((key) => invoices.some((invoice) => invoice.category === key)), [invoices]);
+
+  const toggle = (id: string) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const header = (
+    <View>
+      <PageHeader
+        title={t("invoicesTitle")}
+        subtitle={t("invoicesCount", { n: invoices.length })}
+        right={
+          <IconButton
+            icon="plus"
+            label={t("addManually")}
+            onPress={() => {
+              const invoice = addManualInvoice(null);
+              router.push(`/invoice/${invoice.id}`);
+            }}
+          />
+        }
+      />
+      <Segmented
+        value={view}
+        onChange={setView}
+        options={[
+          { value: "invoices", label: t("viewInvoices") },
+          { value: "batches", label: t("viewBatches") },
+        ]}
+      />
+      {view === "invoices" ? (
+        <View style={{ marginTop: 14 }}>
+          <Field label="" placeholder={t("searchPlaceholder")} value={query} onChangeText={setQuery} icon="magnify" returnKeyType="search" />
+          <ChipScroller<StatusFilter>
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: "all", label: t("all") },
+              { value: "needs-review", label: t("statusNeedsReview"), icon: "alert-circle-outline" },
+              { value: "approved", label: t("statusApproved"), icon: "check-decagram-outline" },
+            ]}
+          />
+          {usedCategories.length > 1 ? (
+            <View style={{ marginTop: 8 }}>
+              <ChipScroller<CategoryKey | "all">
+                value={category}
+                onChange={setCategory}
+                options={[{ value: "all", label: t("filterCategory") }, ...usedCategories.map((key) => ({ value: key, label: CATEGORY_LABELS[key][language], icon: CATEGORY_LABELS[key].icon }))]}
+              />
+            </View>
+          ) : null}
+          <View style={{ height: 14 }} />
+        </View>
+      ) : (
+        <View style={{ height: 14 }} />
+      )}
+    </View>
+  );
 
   return (
-    <ScreenContainer className="px-5 pt-4" edges={["top", "left", "right"]}>
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-        ListHeaderComponent={<View>
-          <View style={styles.header}><View><Text style={[styles.kicker, { color: colors.primary }]}>سجل العمل</Text><Text style={[styles.title, { color: colors.foreground }]}>الفواتير</Text><Text style={[styles.subtitle, { color: colors.muted }]}>{reviewed} موثقة · {invoices.length - reviewed} تحتاج مراجعة</Text></View><Pressable onPress={() => router.push("/scan")} style={({ pressed }) => [styles.addButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><IconSymbol name="plus.circle.fill" color="#FFFFFF" size={21} /></Pressable></View>
-          <View style={[styles.search, { borderColor: colors.border, backgroundColor: colors.surface }]}><IconSymbol name="magnifyingglass" color={colors.muted} size={19} /><TextInput value={query} onChangeText={setQuery} placeholder="ابحث باسم المورد أو رقم الفاتورة" placeholderTextColor={colors.muted} style={[styles.searchInput, { color: colors.foreground }]} /></View>
-          <View style={styles.summaryRow}><View style={[styles.summary, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.summaryLabel, { color: colors.muted }]}>إجمالي السجل</Text><Text style={[styles.summaryValue, { color: colors.foreground }]}>{formatSar(invoices.reduce((sum, item) => sum + item.total, 0))}</Text></View><View style={[styles.summary, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.summaryLabel, { color: colors.muted }]}>ضريبة VAT</Text><Text style={[styles.summaryValue, { color: colors.foreground }]}>{formatSar(invoices.reduce((sum, item) => sum + item.vat, 0))}</Text></View></View>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>كل الفواتير</Text>
-        </View>}
-        renderItem={({ item }) => <InvoiceCard invoice={item} colors={colors} />}
-        ListEmptyComponent={<View style={[styles.empty, { backgroundColor: colors.surface, borderColor: colors.border }]}><IconSymbol name="doc.text.fill" color={colors.muted} size={26} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>{query ? "لا توجد نتائج" : "سجلك جاهز للفاتورة الأولى"}</Text><Text style={[styles.emptyCopy, { color: colors.muted }]}>{query ? "جرّب كلمة بحث مختلفة." : "التقط فاتورة أو استورد صورة لبدء التحليل."}</Text></View>}
-      />
-    </ScreenContainer>
+    <Screen>
+      {view === "invoices" ? (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: selecting ? 180 : 120 }}
+          ListHeaderComponent={header}
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item }) => (
+            <InvoiceRow
+              invoice={item}
+              selecting={selecting}
+              selected={selected.has(item.id)}
+              onLongPress={() => toggle(item.id)}
+              onPress={() => (selecting ? toggle(item.id) : router.push(`/invoice/${item.id}`))}
+            />
+          )}
+          ListEmptyComponent={<EmptyState icon="file-search-outline" title={invoices.length ? t("noResults") : t("noInvoicesTitle")} body={invoices.length ? undefined : t("noInvoicesBody")} />}
+          ListFooterComponent={filtered.length > 4 ? <InlineBanner /> : null}
+        />
+      ) : (
+        <FlatList
+          data={batches}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
+          ListHeaderComponent={header}
+          renderItem={({ item }) => (
+            <BatchCard
+              batch={item}
+              invoices={invoices.filter((invoice) => invoice.batchId === item.id)}
+              processing={jobs.filter((job) => job.batchId === item.id && job.status !== "failed").length}
+              onPress={() => router.push(`/batch/${item.id}`)}
+            />
+          )}
+          ListEmptyComponent={<EmptyState icon="folder-outline" title={t("noInvoicesTitle")} body={t("noInvoicesBody")} />}
+        />
+      )}
+
+      {selecting ? (
+        <View style={[styles.actionBar, { backgroundColor: colors.surface, borderColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) + 64 }]}>
+          <Row style={{ justifyContent: "space-between", marginBottom: 10 }}>
+            <Text variant="subheading">{t("selectedCount", { n: selected.size })}</Text>
+            <Button title={t("cancel")} variant="ghost" size="sm" full={false} onPress={() => setSelected(new Set())} />
+          </Row>
+          <Row gap={8}>
+            <Button
+              title={t("approveSelected")}
+              icon="check-all"
+              variant="secondary"
+              size="md"
+              style={{ flex: 1 }}
+              onPress={() => {
+                approveInvoices([...selected]);
+                setSelected(new Set());
+              }}
+            />
+            <Button
+              title={t("exportSelected")}
+              icon="microsoft-excel"
+              size="md"
+              style={{ flex: 1 }}
+              onPress={() => {
+                setExportSelection([...selected]);
+                setSelected(new Set());
+                router.push({ pathname: "/export", params: { scope: "selection" } });
+              }}
+            />
+            <IconButton
+              icon="trash-can-outline"
+              tone="danger"
+              size={46}
+              label={t("deleteSelected")}
+              onPress={() =>
+                confirmAction(t("deleteInvoicesConfirm", { n: selected.size }), t("delete"), t("cancel"), () => {
+                  deleteInvoices([...selected]);
+                  setSelected(new Set());
+                })
+              }
+            />
+          </Row>
+        </View>
+      ) : null}
+    </Screen>
   );
 }
 
-function InvoiceCard({ invoice, colors }: { invoice: Invoice; colors: ReturnType<typeof useColors> }) {
-  const needsReview = invoice.status === "needs-review";
-  return <Pressable onPress={() => router.push("/scan")} style={({ pressed }) => [styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}><View style={[styles.cardIcon, { backgroundColor: needsReview ? "#FFF4DD" : "#E8F6F1" }]}><IconSymbol name="doc.text.fill" color={needsReview ? "#D98C18" : colors.primary} size={21} /></View><View style={styles.cardBody}><Text style={[styles.vendor, { color: colors.foreground }]} numberOfLines={1}>{invoice.vendorName || "مورد غير معروف"}</Text><Text style={[styles.meta, { color: colors.muted }]}>{invoice.invoiceNumber || "رقم غير متوفر"} · {formatDate(invoice.issueDate)}</Text><View style={styles.tagRow}><View style={[styles.tag, { backgroundColor: needsReview ? "#FFF4DD" : "#E8F6F1" }]}><Text style={[styles.tagText, { color: needsReview ? "#B67511" : colors.success }]}>{needsReview ? "تحتاج مراجعة" : "موثقة"}</Text></View><Text style={[styles.source, { color: colors.muted }]}>{invoice.source === "camera" ? "كاميرا" : invoice.source === "pdf" ? "PDF" : "صورة"}</Text></View></View><View style={styles.amountBox}><Text style={[styles.amount, { color: colors.foreground }]}>{formatSar(invoice.total)}</Text><Text style={[styles.confidence, { color: invoice.confidence >= 0.82 ? colors.success : "#D98C18" }]}>{Math.round(invoice.confidence * 100)}% دقة</Text></View></Pressable>;
-}
-
 const styles = StyleSheet.create({
-  content: { paddingBottom: 32 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 },
-  kicker: { fontSize: 11, fontWeight: "800", letterSpacing: 1.1 },
-  title: { fontSize: 28, fontWeight: "800", marginTop: 3 },
-  subtitle: { fontSize: 12, marginTop: 4 },
-  addButton: { width: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-  search: { height: 48, borderWidth: 1, borderRadius: 14, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 13, marginBottom: 12 },
-  searchInput: { flex: 1, fontSize: 12, textAlign: "right" },
-  summaryRow: { flexDirection: "row", gap: 10, marginBottom: 22 },
-  summary: { flex: 1, borderWidth: 1, borderRadius: 15, padding: 13 },
-  summaryLabel: { fontSize: 11 },
-  summaryValue: { fontSize: 15, fontWeight: "800", marginTop: 7 },
-  sectionTitle: { fontSize: 17, fontWeight: "800", marginBottom: 10 },
-  card: { borderWidth: 1, borderRadius: 17, padding: 12, flexDirection: "row", alignItems: "center", gap: 11, marginBottom: 9 },
-  cardIcon: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  cardBody: { flex: 1 },
-  vendor: { fontSize: 13, fontWeight: "800" },
-  meta: { fontSize: 11, marginTop: 5 },
-  tagRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
-  tag: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
-  tagText: { fontSize: 9, fontWeight: "800" },
-  source: { fontSize: 10 },
-  amountBox: { alignItems: "flex-end" },
-  amount: { fontSize: 12, fontWeight: "800" },
-  confidence: { fontSize: 10, fontWeight: "700", marginTop: 5 },
-  empty: { borderWidth: 1, borderRadius: 17, padding: 26, alignItems: "center" },
-  emptyTitle: { fontSize: 14, fontWeight: "800", marginTop: 10 },
-  emptyCopy: { fontSize: 12, marginTop: 6 },
-  pressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
+  actionBar: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopLeftRadius: 22, borderTopRightRadius: 22 },
 });
