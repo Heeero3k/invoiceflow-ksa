@@ -73,6 +73,16 @@ export class GoogleApiError extends Error {
   }
 }
 
+export async function driveApi<T>(accessToken: string, path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(`https://www.googleapis.com/drive/v3${path}`, {
+    ...init,
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new GoogleApiError(body?.error?.message ?? `Google Drive error ${response.status}`, response.status);
+  return body as T;
+}
+
 export async function sheetsApi<T>(accessToken: string, path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets${path}`, {
     ...init,

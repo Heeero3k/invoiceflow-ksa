@@ -1,8 +1,12 @@
-// Google Sheets connection: status, connect (OAuth URL), export (append rows), disconnect.
+// The user's Google account: Drive (their own folder for Excel files and originals)
+// and Sheets (a running invoice log). Actions: status, connect, store_token,
+// drive_access, export (append rows), disconnect.
 import { AppError, corsHeaders, errorResponse, json } from "../_shared/http.ts";
 import { adminClient, requireUser } from "../_shared/supabase.ts";
-import { decryptText, signState } from "../_shared/crypto.ts";
-import { GOOGLE_SCOPES, GoogleApiError, accessTokenFromRefresh, googleConfig, isGoogleConfigured, sheetsApi } from "../_shared/google.ts";
+import { decryptText, encryptText, signState } from "../_shared/crypto.ts";
+import { GOOGLE_SCOPES, GoogleApiError, accessTokenFromRefresh, driveApi, googleConfig, isGoogleConfigured, sheetsApi } from "../_shared/google.ts";
+
+const DRIVE_FOLDER_NAME = "InvoiceFlow KSA";
 
 type Cell = string | number | null;
 type ExportBody = { rows?: Cell[][]; header?: string[]; title?: string; sheetTitle?: string; rtl?: boolean };
@@ -17,6 +21,10 @@ Deno.serve(async (req) => {
         return json(await status(user.id));
       case "connect":
         return json(await connect(user.id, String(body.returnTo ?? "")));
+      case "store_token":
+        return json(await storeToken(user.id, String(body.refreshToken ?? ""), user.email ?? null));
+      case "drive_access":
+        return json(await driveAccess(user.id));
       case "export":
         return json(await exportRows(user.id, body as ExportBody));
       case "disconnect":
@@ -33,7 +41,7 @@ Deno.serve(async (req) => {
 async function status(userId: string) {
   const { data } = await adminClient()
     .from("google_connections")
-    .select("google_email, spreadsheet_url")
+    .select("google_email, spreadsheet_url, drive_folder_url")
     .eq("user_id", userId)
     .maybeSingle();
   return {
@@ -41,7 +49,61 @@ async function status(userId: string) {
     connected: Boolean(data),
     googleEmail: data?.google_email ?? null,
     spreadsheetUrl: data?.spreadsheet_url ?? null,
+    driveFolderUrl: data?.drive_folder_url ?? null,
   };
+}
+
+/**
+ * Saves the Google refresh token obtained during "Sign in with Google" (the
+ * sign-in already asked for Drive + Sheets), so no second consent is needed.
+ * Requires the Supabase Google provider to use the same OAuth client as
+ * GOOGLE_CLIENT_ID.
+ */
+async function storeToken(userId: string, refreshToken: string, email: string | null) {
+  if (!isGoogleConfigured()) throw new AppError("not_configured", "Google is not configured", 503);
+  if (!refreshToken) throw new AppError("bad_request", "Missing refresh token");
+  // Fails fast if the token was issued to a different OAuth client.
+  await accessTokenFromRefresh(refreshToken);
+  const admin = adminClient();
+  const { data: existing } = await admin.from("google_connections").select("user_id").eq("user_id", userId).maybeSingle();
+  const encrypted = await encryptText(refreshToken);
+  const { error } = existing
+    ? await admin.from("google_connections").update({ refresh_token_enc: encrypted, google_email: email, updated_at: new Date().toISOString() }).eq("user_id", userId)
+    : await admin.from("google_connections").insert({ user_id: userId, refresh_token_enc: encrypted, google_email: email });
+  if (error) throw error;
+  return { connected: true };
+}
+
+/**
+ * Returns a short-lived (1h) Google access token, limited to files this app
+ * creates (drive.file), plus the app's folder in the user's Drive. The device
+ * uploads directly to Google, so large files never pass through our server.
+ */
+async function driveAccess(userId: string) {
+  const admin = adminClient();
+  const { data: connection } = await admin.from("google_connections").select("*").eq("user_id", userId).maybeSingle();
+  if (!connection) throw new AppError("sheets_not_connected", "Connect Google first", 409);
+  const accessToken = await accessTokenFromRefresh(await decryptText(connection.refresh_token_enc));
+
+  let folderId: string | null = connection.drive_folder_id;
+  let folderUrl: string | null = connection.drive_folder_url;
+  if (folderId) {
+    const folder = await driveApi<{ trashed?: boolean }>(accessToken, `/files/${folderId}?fields=id,trashed`).catch(() => null);
+    if (!folder || folder.trashed) folderId = null;
+  }
+  if (!folderId) {
+    const created = await driveApi<{ id: string; webViewLink: string }>(accessToken, "/files?fields=id,webViewLink", {
+      method: "POST",
+      body: JSON.stringify({ name: DRIVE_FOLDER_NAME, mimeType: "application/vnd.google-apps.folder" }),
+    });
+    folderId = created.id;
+    folderUrl = created.webViewLink;
+    await admin
+      .from("google_connections")
+      .update({ drive_folder_id: folderId, drive_folder_url: folderUrl, updated_at: new Date().toISOString() })
+      .eq("user_id", userId);
+  }
+  return { accessToken, folderId, folderUrl };
 }
 
 function isAllowedReturnTo(value: string) {

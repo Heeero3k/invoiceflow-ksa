@@ -17,7 +17,7 @@ import { useStore } from "@/lib/store";
 import { isBackendConfigured, supabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/theme";
 
-type ExportRow = { id: string; name: string; file_path: string; invoice_count: number; total: number; created_at: string };
+type ExportRow = { id: string; name: string; file_path: string | null; drive_url: string | null; sheets_url: string | null; invoice_count: number; total: number; created_at: string };
 
 export default function ExportsScreen() {
   const { colors } = useTheme();
@@ -36,7 +36,7 @@ export default function ExportsScreen() {
     try {
       const [sheetStatus, files] = await Promise.all([
         sheets.status().catch(() => null),
-        supabase.from("exports").select("id,name,file_path,invoice_count,total,created_at").order("created_at", { ascending: false }).limit(50),
+        supabase.from("exports").select("id,name,file_path,drive_url,sheets_url,invoice_count,total,created_at").order("created_at", { ascending: false }).limit(50),
       ]);
       setStatus(sheetStatus);
       setHistory((files.data as ExportRow[] | null) ?? []);
@@ -71,7 +71,8 @@ export default function ExportsScreen() {
 
   const openFile = async (file: ExportRow, mode: "open" | "share") => {
     try {
-      const url = await signedExportUrl(file.file_path, file.name);
+      const url = file.drive_url ?? file.sheets_url ?? (file.file_path ? await signedExportUrl(file.file_path, file.name) : null);
+      if (!url) return;
       if (mode === "open") await Linking.openURL(url);
       else await Share.share({ message: `${file.name}\n${url}`, url });
     } catch (error) {
@@ -95,34 +96,37 @@ export default function ExportsScreen() {
         </Card>
       ) : (
         <>
-          <SectionTitle title={t("sheetsCardTitle")} />
+          <SectionTitle title={t("googleCardTitle")} />
           <Card>
             <Row gap={12}>
-              <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.successSoft, alignItems: "center", justifyContent: "center" }}>
-                <Icon name="google-spreadsheet" size={24} color={colors.success} />
+              <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" }}>
+                <Icon name="google" size={24} color={colors.accent} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
-                <Text variant="subheading">Google Sheets</Text>
+                <Text variant="subheading">Google Drive · Sheets</Text>
                 {status?.connected ? (
                   <Badge tone="success" icon="check" label={status.googleEmail ? t("sheetsConnectedAs", { email: status.googleEmail }) : t("sheetsConnected")} />
                 ) : (
                   <Text variant="caption" tone="muted">
-                    {status && !status.configured ? t("sheetsNotConfigured") : t("sheetsNotConnected")}
+                    {status && !status.configured ? t("sheetsNotConfigured") : t("googleCardBody")}
                   </Text>
                 )}
               </View>
               {loading ? <ActivityIndicator color={colors.accent} /> : null}
             </Row>
-            <Row gap={8} style={{ marginTop: 14 }}>
+            {status?.connected && (status.driveFolderUrl || status.spreadsheetUrl) ? (
+              <Row gap={8} style={{ marginTop: 14 }}>
+                {status.driveFolderUrl ? <Button title={t("openDrive")} icon="google-drive" size="md" style={{ flex: 1 }} onPress={() => void Linking.openURL(status.driveFolderUrl!)} /> : null}
+                {status.spreadsheetUrl ? <Button title={t("openSheet")} icon="google-spreadsheet" variant="secondary" size="md" style={{ flex: 1 }} onPress={() => void Linking.openURL(status.spreadsheetUrl!)} /> : null}
+              </Row>
+            ) : null}
+            <Row gap={8} style={{ marginTop: status?.connected ? 8 : 14 }}>
               {status?.connected ? (
                 <>
-                  {status.spreadsheetUrl ? <Button title={t("openSheet")} icon="open-in-new" size="md" style={{ flex: 1 }} onPress={() => void Linking.openURL(status.spreadsheetUrl!)} /> : null}
                   <Button
                     title={t("disconnect")}
-                    variant="secondary"
-                    size="md"
-                    style={{ flex: status.spreadsheetUrl ? undefined : 1 }}
-                    full={!status.spreadsheetUrl}
+                    variant="ghost"
+                    size="sm"
                     onPress={() =>
                       confirmAction(t("disconnect"), t("disconnect"), t("cancel"), async () => {
                         await sheets.disconnect().catch(() => undefined);
@@ -156,7 +160,7 @@ export default function ExportsScreen() {
                 <View key={file.id}>
                   {index ? <Divider /> : null}
                   <ListRow
-                    icon={file.name.endsWith(".csv") ? "file-delimited-outline" : "microsoft-excel"}
+                    icon={file.drive_url ? "google-drive" : file.name.endsWith(".csv") ? "file-delimited-outline" : "microsoft-excel"}
                     title={file.name}
                     subtitle={`${formatDate(file.created_at)} · ${t("invoicesCount", { n: file.invoice_count })} · ${formatMoney(Number(file.total))}`}
                     onPress={() => void openFile(file, "open")}
@@ -172,11 +176,6 @@ export default function ExportsScreen() {
               <EmptyState icon="folder-open-outline" title={t("noExportsTitle")} body={t("noExportsBody")} />
             </Card>
           )}
-          {history.length ? (
-            <Text variant="caption" tone="faint" align="center" style={{ marginTop: 8 }}>
-              {t("linkValidity")}
-            </Text>
-          ) : null}
         </>
       )}
 

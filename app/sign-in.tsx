@@ -79,9 +79,9 @@ export default function SignInScreen() {
       </View>
 
       <View style={{ gap: 10 }}>
-        <Button title={t("continueWithGoogle")} icon="google" variant="secondary" loading={busy === "google"} onPress={() => void withProvider("google")} />
+        <Button title={t("continueWithGoogle")} icon="google" variant="primary" loading={busy === "google"} onPress={() => void withProvider("google")} />
         {Platform.OS === "ios" || Platform.OS === "web" ? (
-          <Button title={t("continueWithApple")} icon="apple" variant="primary" loading={busy === "apple"} onPress={() => void withProvider("apple")} />
+          <Button title={t("continueWithApple")} icon="apple" variant="secondary" loading={busy === "apple"} onPress={() => void withProvider("apple")} />
         ) : null}
       </View>
 

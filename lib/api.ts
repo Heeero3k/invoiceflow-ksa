@@ -55,12 +55,15 @@ export function extractInvoice(file: string, mimeType: string, language: "ar" | 
   return invoke<ExtractResult>("extract-invoice", { file, mimeType, language });
 }
 
-export type SheetsStatus = { configured: boolean; connected: boolean; googleEmail: string | null; spreadsheetUrl: string | null };
+export type SheetsStatus = { configured: boolean; connected: boolean; googleEmail: string | null; spreadsheetUrl: string | null; driveFolderUrl: string | null };
+export type DriveAccess = { accessToken: string; folderId: string; folderUrl: string | null };
 
 export const sheets = {
   status: () => invoke<SheetsStatus>("sheets", { action: "status" }),
   connect: (returnTo: string) => invoke<{ url: string }>("sheets", { action: "connect", returnTo }),
   disconnect: () => invoke<{ connected: false }>("sheets", { action: "disconnect" }),
+  storeToken: (refreshToken: string) => invoke<{ connected: true }>("sheets", { action: "store_token", refreshToken }),
+  driveAccess: () => invoke<DriveAccess>("sheets", { action: "drive_access" }),
   export: (payload: { rows: (string | number)[][]; header: string[]; title: string; sheetTitle: string; rtl: boolean }) =>
     invoke<{ spreadsheetUrl: string; updatedRange: string | null }>("sheets", { action: "export", ...payload }),
 };
