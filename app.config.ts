@@ -1,129 +1,91 @@
-// Load environment variables with proper priority (system > .env)
-import "./scripts/load-env.js";
 import type { ExpoConfig } from "expo/config";
 
-// Bundle ID format: space.manus.<project_name_dots>.<timestamp>
-// e.g., "my-app" created at 2024-01-15 10:30:45 -> "space.manus.my.app.t20240115103045"
-// Bundle ID can only contain letters, numbers, and dots
-// Android requires each dot-separated segment to start with a letter
-const rawBundleId = "com.app.invoiceflowksa";
-const bundleId =
-  rawBundleId
-    .replace(/[-_]/g, ".") // Replace hyphens/underscores with dots
-    .replace(/[^a-zA-Z0-9.]/g, "") // Remove invalid chars
-    .replace(/\.+/g, ".") // Collapse consecutive dots
-    .replace(/^\.+|\.+$/g, "") // Trim leading/trailing dots
-    .toLowerCase()
-    .split(".")
-    .map((segment) => {
-      // Android requires each segment to start with a letter
-      // Prefix with 'x' if segment starts with a digit
-      return /^[a-zA-Z]/.test(segment) ? segment : "x" + segment;
-    })
-    .join(".") || "space.manus.app";
-// Extract timestamp from bundle ID and prefix with "manus" for deep link scheme
-// e.g., "space.manus.my.app.t20240115103045" -> "manus20240115103045"
-const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
-const schemeFromBundleId = `manus${timestamp}`;
+// Store identity. Do not change these after release: Play Console and App Store
+// Connect are bound to the package / bundle identifier.
+const BUNDLE_ID = "com.app.invoiceflowksa";
+const SCHEME = "invoiceflowksa";
 
-const env = {
-  // App branding - update these values directly (do not use env vars)
-  appName: "InvoiceFlow KSA",
-  appSlug: "invoiceflow-ksa",
-  // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
-  // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "",
-  scheme: schemeFromBundleId,
-  iosBundleId: bundleId,
-  androidPackage: bundleId,
-};
+// AdMob app IDs are public identifiers (they ship inside the app binary).
+// The iOS value falls back to Google's official sample app ID so iOS builds
+// work before the real iOS app is created in AdMob; replace it via env.
+const ADMOB_ANDROID_APP_ID = process.env.ADMOB_ANDROID_APP_ID || "ca-app-pub-2689118284753908~5629884518";
+const ADMOB_IOS_APP_ID = process.env.ADMOB_IOS_APP_ID || "ca-app-pub-3940256099942544~1458002511";
 
 const config: ExpoConfig = {
-  name: env.appName,
-  slug: env.appSlug,
-  version: "1.0.4",
+  name: "InvoiceFlow KSA",
+  slug: "invoiceflow-ksa",
+  owner: "hero2011",
+  version: "1.1.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
-  scheme: env.scheme,
+  scheme: SCHEME,
   userInterfaceStyle: "automatic",
   newArchEnabled: true,
   ios: {
-    supportsTablet: true,
-    bundleIdentifier: env.iosBundleId,
-    "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+    supportsTablet: false,
+    bundleIdentifier: BUNDLE_ID,
+    buildNumber: "1",
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+      CFBundleAllowMixedLocalizations: true,
+      CFBundleLocalizations: ["ar", "en"],
+    },
   },
   android: {
-    versionCode: 11,
+    versionCode: 12,
     adaptiveIcon: {
-      backgroundColor: "#E6F4FE",
+      backgroundColor: "#0F1B2D",
       foregroundImage: "./assets/images/android-icon-foreground.png",
       backgroundImage: "./assets/images/android-icon-background.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
-    package: env.androidPackage,
-    permissions: ["POST_NOTIFICATIONS", "com.google.android.gms.permission.AD_ID"],
-    intentFilters: [
-      {
-        action: "VIEW",
-        autoVerify: true,
-        data: [
-          {
-            scheme: env.scheme,
-            host: "*",
-          },
-        ],
-        category: ["BROWSABLE", "DEFAULT"],
-      },
-    ],
+    package: BUNDLE_ID,
+    permissions: ["com.google.android.gms.permission.AD_ID"],
+    blockedPermissions: ["android.permission.RECORD_AUDIO"],
   },
   web: {
     bundler: "metro",
-    output: "static",
+    output: "single",
     favicon: "./assets/images/favicon.png",
   },
   plugins: [
     "expo-router",
     "expo-font",
     "expo-web-browser",
+    "expo-localization",
     [
       "expo-camera",
       {
-        cameraPermission: "اسمح لـ InvoiceFlow KSA باستخدام الكاميرا لمسح الفواتير وQR.",
+        cameraPermission: "يستخدم InvoiceFlow KSA الكاميرا لتصوير الفواتير وقراءة رمز QR الضريبي.",
+        microphonePermission: false,
+        recordAudioAndroid: false,
       },
     ],
     [
-      "expo-audio",
+      "expo-image-picker",
       {
-        microphonePermission: "Allow $(PRODUCT_NAME) to access your microphone.",
-      },
-    ],
-    [
-      "expo-video",
-      {
-        supportsBackgroundPlayback: true,
-        supportsPictureInPicture: true,
+        photosPermission: "يحتاج InvoiceFlow KSA الوصول للصور لاستيراد صور الفواتير.",
+        cameraPermission: "يستخدم InvoiceFlow KSA الكاميرا لتصوير الفواتير.",
+        microphonePermission: false,
       },
     ],
     [
       "react-native-google-mobile-ads",
       {
-        androidAppId: "ca-app-pub-2689118284753908~5629884518",
+        androidAppId: ADMOB_ANDROID_APP_ID,
+        iosAppId: ADMOB_IOS_APP_ID,
       },
     ],
     [
       "expo-splash-screen",
       {
         image: "./assets/images/splash-icon.png",
-        imageWidth: 200,
+        imageWidth: 180,
         resizeMode: "contain",
-        backgroundColor: "#ffffff",
-        dark: {
-          backgroundColor: "#000000",
-        },
+        backgroundColor: "#F6F4EF",
+        dark: { backgroundColor: "#0B0D11" },
       },
     ],
     [
@@ -140,6 +102,9 @@ const config: ExpoConfig = {
     eas: {
       projectId: "19309587-5e19-4b64-b9ac-bdf58b77e287",
     },
+    // Keep native layout LTR; the app mirrors its own layout per language so
+    // switching Arabic <-> English is instant and identical on every platform.
+    supportsRTL: false,
   },
   experiments: {
     typedRoutes: true,
