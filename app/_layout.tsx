@@ -40,6 +40,7 @@ function AppStack() {
         <Stack.Screen name="invoice/[id]" />
         <Stack.Screen name="export" options={{ presentation: "modal" }} />
         <Stack.Screen name="sign-in" options={{ presentation: "modal" }} />
+        <Stack.Screen name="auth-callback" />
       </Stack>
     </>
   );

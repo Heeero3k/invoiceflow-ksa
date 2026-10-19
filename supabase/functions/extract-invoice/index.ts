@@ -94,11 +94,13 @@ Deno.serve(async (req) => {
     if (file.length > MAX_BASE64_LENGTH) throw new AppError("file_too_large", "File is too large", 413);
     const language = body.language === "en" ? "English" : "Arabic";
 
+    // Check configuration before charging the user a scan.
+    const apiKey = requireEnv("ANTHROPIC_API_KEY");
     await consumeQuota(user.id, Boolean(user.is_anonymous));
     chargedUser = user.id;
 
     const model = Deno.env.get("CLAUDE_MODEL") ?? "claude-opus-5-5";
-    const client = new Anthropic({ apiKey: requireEnv("ANTHROPIC_API_KEY") });
+    const client = new Anthropic({ apiKey });
 
     const documentBlock: Anthropic.Beta.BetaContentBlockParam =
       mimeType === "application/pdf"

@@ -100,7 +100,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const sendEmailCode = useCallback(async (email: string) => {
     if (!isBackendConfigured) throw new ApiError("not_configured");
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+    // The email carries both a one-time code and a link back into the app (auth-callback).
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: redirectUrl() } });
     if (error) throw error;
   }, []);
 
