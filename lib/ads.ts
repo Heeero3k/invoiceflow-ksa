@@ -9,14 +9,17 @@ const env = {
   interstitialIos: process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_IOS ?? "",
 };
 
-/** Test units in development builds; production units only when configured. */
+// Preview/test installs show Google's test ads so taps never count as invalid traffic.
+const USE_TEST_ADS = __DEV__ || process.env.EXPO_PUBLIC_ADS_TEST === "1";
+
+/** Test units in development and preview builds; production units only when configured. */
 export function bannerUnitId(): string | null {
-  if (__DEV__) return TestIds.ADAPTIVE_BANNER;
+  if (USE_TEST_ADS) return TestIds.ADAPTIVE_BANNER;
   return (Platform.OS === "ios" ? env.bannerIos : env.bannerAndroid) || null;
 }
 
 function interstitialUnitId(): string | null {
-  if (__DEV__) return TestIds.INTERSTITIAL;
+  if (USE_TEST_ADS) return TestIds.INTERSTITIAL;
   return (Platform.OS === "ios" ? env.interstitialIos : env.interstitialAndroid) || null;
 }
 
