@@ -8,6 +8,7 @@ import { Card, Divider, ListRow, PageHeader, ProgressBar, Row, ScrollScreen, Seg
 import { Text } from "@/components/ui/text";
 import { errorKey } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { AI_EXTRACTION } from "@/lib/features";
 import { confirmAction, notify } from "@/lib/dialogs";
 import { useI18n } from "@/lib/i18n";
 import { usePreferences, type Language, type ThemeMode } from "@/lib/preferences";
@@ -26,7 +27,7 @@ export default function SettingsScreen() {
   const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
 
   useEffect(() => {
-    if (!auth.isSignedIn || !auth.user) return;
+    if (!AI_EXTRACTION || !auth.isSignedIn || !auth.user) return;
     const month = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" }).slice(0, 7);
     Promise.all([
       supabase.from("usage_counters").select("scans").eq("month", month).maybeSingle(),

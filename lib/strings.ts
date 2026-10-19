@@ -165,6 +165,9 @@ export const ar = {
   noPreview: "لا توجد معاينة",
   recentProjects: "مشاريع سابقة",
   disclaimer: "المراجعة البشرية مطلوبة دائماً. التطبيق لا يغني عن نظام الفوترة الإلكترونية أو الإقرار الضريبي.",
+  onDeviceNote: "قُرئت الفاتورة على جهازك مجاناً. راجع الحقول وأكمل الناقص منها.",
+  onDeviceQrNote: "قُرئت بيانات المورد والرقم الضريبي والمبالغ من رمز QR الضريبي. أكمل رقم الفاتورة والتصنيف.",
+  manualEntryNote: "لم نتمكن من قراءة الحقول تلقائياً. أدخلها بالنظر إلى صورة الفاتورة أعلاه.",
 
   // Export
   exportTitle: "تصدير",
@@ -449,6 +452,9 @@ export const en: Record<StringKey, string> = {
   noPreview: "No preview",
   recentProjects: "Recent projects",
   disclaimer: "Human review is always required. This app doesn't replace an e-invoicing system or tax filing.",
+  onDeviceNote: "Read for free on your device. Check the fields and fill in what's missing.",
+  onDeviceQrNote: "Vendor, VAT number and amounts were read from the e-invoice QR code. Add the invoice number and category.",
+  manualEntryNote: "We couldn't read the fields automatically. Enter them using the invoice photo above.",
 
   exportTitle: "Export",
   exportSubtitle: "{n} invoices · {total}",

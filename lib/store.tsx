@@ -6,8 +6,10 @@ import { buildLocalInvoiceDraft, compareWithQr, decodeSaudiQrPayload, mergeQr, t
 import { ApiError, errorKey, extractInvoice } from "./api";
 import { useAuth } from "./auth";
 import { deleteLocalFile, prepareForAi, type UploadMime } from "./files";
+import { AI_EXTRACTION } from "./features";
 import { extractLocalText } from "./local-ocr";
 import { usePreferences } from "./preferences";
+import { scanQrFromImage } from "./qr";
 import type { StringKey } from "./strings";
 import { isBackendConfigured } from "./supabase";
 import { pullChanges, pushChanges, rowToBatch, rowToInvoice, uploadOriginal } from "./sync";
@@ -245,51 +247,71 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     async (job: ScanJob) => {
       dispatch({ type: "patchJob", id: job.id, patch: { status: "processing", attempts: job.attempts + 1 } });
       const isImage = job.mimeType !== "application/pdf";
-      const localText = isImage ? await extractLocalText(job.uri) : "";
+      // Free, on-device first: OCR text and the ZATCA QR printed on the invoice.
+      const [localText, photoQr] = isImage ? await Promise.all([extractLocalText(job.uri), job.qr ? Promise.resolve(null) : scanQrFromImage(job.uri)]) : ["", null];
+      const qrPayload = job.qr ?? photoQr;
       const localDraft = localText ? buildLocalInvoiceDraft(localText) : null;
       let fields: ExtractedFields | null = null;
       let failure: StringKey | null = null;
+      let onDevice = !AI_EXTRACTION;
 
-      try {
-        await auth.ensureSession();
-        const prepared = await prepareForAi(job.uri, job.mimeType);
-        const result = await extractInvoice(prepared.base64, prepared.mimeType, language);
-        fields = {
-          ...result,
-          category: isCategoryKey(result.category) ? result.category : "other",
-          issueDate: normalizeDate(result.issueDate ?? ""),
-          subtotal: round2(Number(result.subtotal) || 0),
-          vat: round2(Number(result.vat) || 0),
-          total: round2(Number(result.total) || 0),
-          confidence: Math.max(0, Math.min(1, Number(result.confidence) || 0)),
-          warnings: Array.isArray(result.warnings) ? result.warnings.filter((w) => typeof w === "string") : [],
-        };
-      } catch (error) {
-        failure = errorKey(error);
-        const offline = error instanceof ApiError && (error.code === "offline" || error.code === "busy");
-        if (offline && job.attempts < 20) {
-          // Keep it in the queue and try again later.
-          dispatch({ type: "patchJob", id: job.id, patch: { status: "queued", errorKey: failure, retryAt: Date.now() + 20_000 } });
-          return;
+      if (AI_EXTRACTION) {
+        try {
+          await auth.ensureSession();
+          const prepared = await prepareForAi(job.uri, job.mimeType);
+          const result = await extractInvoice(prepared.base64, prepared.mimeType, language);
+          fields = {
+            ...result,
+            category: isCategoryKey(result.category) ? result.category : "other",
+            issueDate: normalizeDate(result.issueDate ?? ""),
+            subtotal: round2(Number(result.subtotal) || 0),
+            vat: round2(Number(result.vat) || 0),
+            total: round2(Number(result.total) || 0),
+            confidence: Math.max(0, Math.min(1, Number(result.confidence) || 0)),
+            warnings: Array.isArray(result.warnings) ? result.warnings.filter((w) => typeof w === "string") : [],
+          };
+        } catch (error) {
+          const code = error instanceof ApiError ? error.code : null;
+          if ((code === "offline" || code === "busy") && job.attempts < 20) {
+            // Keep it in the queue and try again later.
+            dispatch({ type: "patchJob", id: job.id, patch: { status: "queued", errorKey: errorKey(error), retryAt: Date.now() + 20_000 } });
+            return;
+          }
+          if (code === "not_invoice") {
+            dispatch({ type: "patchJob", id: job.id, patch: { status: "failed", errorKey: errorKey(error) } });
+            return;
+          }
+          if (code === "not_configured") onDevice = true;
+          else failure = errorKey(error);
+          fields = localDraft;
         }
-        if (error instanceof ApiError && error.code === "not_invoice") {
-          dispatch({ type: "patchJob", id: job.id, patch: { status: "failed", errorKey: failure } });
-          return;
-        }
+      } else {
         fields = localDraft;
       }
 
-      if (!fields) {
-        dispatch({ type: "patchJob", id: job.id, patch: { status: "failed", errorKey: failure ?? "err_ai_failed" } });
-        return;
+      let qrStatus: Invoice["qrStatus"] = "none";
+      const qr = qrPayload ? decodeSaudiQrPayload(qrPayload) : null;
+      if (qr) {
+        const base = fields ?? buildLocalInvoiceDraft("");
+        qrStatus = fields ? compareWithQr(fields, qr) : "valid";
+        // QR values are machine-printed by the seller's e-invoicing system, so they are reliable.
+        fields = { ...mergeQr(base, qr), confidence: Math.max(base.confidence, onDevice ? 0.75 : base.confidence) };
       }
 
-      let qrStatus: Invoice["qrStatus"] = "none";
-      const qr = job.qr ? decodeSaudiQrPayload(job.qr) : null;
-      if (qr) {
-        qrStatus = compareWithQr(fields, qr);
-        fields = mergeQr(fields, qr);
+      const notes: string[] = [];
+      if (!fields) {
+        if (!onDevice) {
+          dispatch({ type: "patchJob", id: job.id, patch: { status: "failed", errorKey: failure ?? "err_ai_failed" } });
+          return;
+        }
+        // Free mode never drops a document: open it for manual entry next to its photo.
+        fields = buildLocalInvoiceDraft("");
+        fields.confidence = 0;
+        notes.push("#manualEntryNote");
+      } else if (onDevice) {
+        notes.push(qr ? "#onDeviceQrNote" : "#onDeviceNote");
       }
+      if (failure) notes.push(`#${failure}`);
 
       const invoice = emptyInvoice({
         ...fields,
@@ -299,7 +321,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         localUri: job.uri,
         qrStatus,
         status: "needs-review",
-        warnings: failure ? [...fields.warnings, `#${failure}`] : fields.warnings,
+        warnings: [...fields.warnings, ...notes],
       });
       dispatch({ type: "upsertInvoices", invoices: [invoice] });
       dispatch({ type: "removeJob", id: job.id });

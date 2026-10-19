@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkAmounts, emptyInvoice, isSafeToBulkApprove, isValidSaudiTaxId, normalizeDate, parseAmount } from "../shared/invoice";
-import { buildLocalInvoiceDraft, compareWithQr, decodeSaudiQrPayload, mergeQr } from "../shared/invoice-utils";
+import { buildLocalInvoiceDraft, compareWithQr, decodeSaudiQrPayload, guessCategory, mergeQr } from "../shared/invoice-utils";
 
 function qrPayload(fields: string[]) {
   const raw = Buffer.concat(
@@ -72,5 +72,15 @@ describe("on-device OCR parsing", () => {
     expect(draft.total).toBe(115);
     expect(draft.vat).toBe(15);
     expect(draft.subtotal).toBe(100);
+  });
+});
+
+describe("free category guess", () => {
+  it("maps common invoice words to expense categories", () => {
+    expect(guessCategory("محطة وقود الدريس\nديزل 200 لتر")).toBe("fuel");
+    expect(guessCategory("Cement bags 50kg")).toBe("materials");
+    expect(guessCategory("Crane rental 3 days")).toBe("equipment");
+    expect(guessCategory("مطعم البيك")).toBe("hospitality");
+    expect(guessCategory("random text")).toBe("other");
   });
 });
