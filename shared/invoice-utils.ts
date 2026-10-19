@@ -80,6 +80,23 @@ export function mergeQr(fields: ExtractedFields, qr: SaudiQrFields): ExtractedFi
   };
 }
 
+const CATEGORY_HINTS: [CategoryKey, RegExp][] = [
+  ["fuel", /(fuel|diesel|gasoline|petrol|benzine|وقود|بنزين|ديزل|محطة)/i],
+  ["materials", /(cement|concrete|steel|rebar|block|sand|pipe|cable|اسمنت|إسمنت|خرسانة|حديد|بلك|رمل|مواسير|كابل)/i],
+  ["equipment", /(rental|rent of|crane|excavator|loader|generator|تأجير|رافعة|حفار|شيول|مولد)/i],
+  ["transport", /(transport|freight|shipping|logistics|trailer|نقل|شحن)/i],
+  ["utilities", /(electricity|water bill|internet|\bstc\b|mobily|zain|كهرباء|مياه|اتصالات)/i],
+  ["maintenance", /(maintenance|repair|spare parts|service center|صيانة|إصلاح|قطع غيار)/i],
+  ["hospitality", /(restaurant|cafe|coffee|catering|hotel|مطعم|مقهى|كافيه|فندق|إعاشة)/i],
+  ["office", /(stationery|printer|toner|paper|قرطاسية|أحبار|مكتبية)/i],
+  ["government", /(government|municipality|baladi|muqeem|jawazat|بلدية|حكومي|رسوم|مقيم|جوازات)/i],
+];
+
+/** Free keyword guess for the expense category; the user can change it on review. */
+export function guessCategory(text: string): CategoryKey {
+  return CATEGORY_HINTS.find(([, pattern]) => pattern.test(text))?.[0] ?? "other";
+}
+
 /** Best-effort offline parse of on-device OCR text. Always reviewed by the user. */
 export function buildLocalInvoiceDraft(text: string): ExtractedFields {
   const normalized = normalizeDigits(text.replace(/\r/g, "\n"));
@@ -111,7 +128,7 @@ export function buildLocalInvoiceDraft(text: string): ExtractedFields {
     invoiceNumber,
     issueDate: normalizeDate(date),
     projectName: projectLine.replace(/^.*?(?:مشروع|project|موقع|site)\s*[:#-]?\s*/i, ""),
-    category: "other",
+    category: guessCategory(normalized),
     subtotal,
     vat,
     total,

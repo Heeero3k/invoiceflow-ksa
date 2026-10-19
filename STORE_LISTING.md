@@ -13,7 +13,7 @@
 InvoiceFlow مساعد محاسبي مصمم للمحاسبين وشركات المقاولات وفرق المشتريات في السعودية:
 
 • مسح متعدد: صوّر عشرات الفواتير متتالية، أو استورد صوراً وملفات PDF دفعة واحدة.
-• قراءة ذكية: استخراج المورد، والرقم الضريبي، ورقم الفاتورة، والتاريخ، والمبالغ قبل الضريبة والضريبة والإجمالي.
+• قراءة مجانية على الجهاز: يقرأ رمز QR الضريبي السعودي (المورد، الرقم الضريبي، التاريخ، الضريبة، الإجمالي) ونص الفاتورة دون إرسالها لأي خادم.
 • تصنيف تلقائي: مواد بناء، معدات، مقاولو باطن، نقل، وقود، صيانة… مع ربط كل فاتورة بالمشروع أو الموقع.
 • مراجعة سريعة: تنبيهات عند عدم تطابق المبالغ أو الضريبة أو الرقم الضريبي، واعتماد الفواتير الواضحة بضغطة.
 • رمز QR السعودي: قراءة رمز الفاتورة الإلكترونية ومقارنته بالبيانات المستخرجة.
@@ -36,7 +36,7 @@ InvoiceFlow مساعد محاسبي مصمم للمحاسبين وشركات ا�
 Turn stacks of paper invoices into a clean Excel register in minutes.
 
 • Batch scanning: shoot dozens of invoices in a row, or import photos and PDFs at once.
-• Smart extraction: vendor, VAT number, invoice number, date, subtotal, VAT and total.
+• Free on-device reading: reads the Saudi e-invoice QR (vendor, VAT number, date, VAT, total) and invoice text without sending it to any server.
 • Auto-categorization by expense type, linked to your project or site.
 • Fast review with checks for mismatched totals, VAT and VAT numbers; bulk-approve clear invoices.
 • Saudi e-invoice QR reading compared against the extracted data.
