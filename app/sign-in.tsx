@@ -103,7 +103,7 @@ export default function SignInScreen() {
           <Text variant="body" tone="muted" style={{ marginBottom: 12 }}>
             {t("codeSentTo", { email: email.trim() })}
           </Text>
-          <Field label={t("codePlaceholder")} value={code} onChangeText={(value) => setCode(value.replace(/\D/g, "").slice(0, 6))} keyboardType="number-pad" numeric autoComplete="one-time-code" placeholder="••••••" />
+          <Field label={t("codePlaceholder")} value={code} onChangeText={(value) => setCode(value.replace(/\D/g, "").slice(0, 8))} keyboardType="number-pad" numeric autoComplete="one-time-code" placeholder="••••••" />
           <Button title={t("verify")} loading={busy === "verify"} disabled={code.length < 6} onPress={() => void verify()} />
           <Button title={t("changeEmail")} variant="ghost" size="md" onPress={() => setCodeSent(false)} style={{ marginTop: 6 }} />
         </>

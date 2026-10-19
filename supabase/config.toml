@@ -16,3 +16,15 @@ verify_jwt = false
 
 [functions.delete-account]
 verify_jwt = true
+
+[auth]
+site_url = "invoiceflowksa://"
+additional_redirect_urls = ["invoiceflowksa://auth-callback", "invoiceflowksa://**", "exp://**", "http://localhost:8081"]
+enable_signup = true
+# Guest mode: lets the app call the AI with a limited quota before sign-in.
+enable_anonymous_sign_ins = true
+
+[auth.email]
+enable_signup = true
+otp_expiry = 3600
+
