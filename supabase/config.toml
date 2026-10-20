@@ -28,3 +28,10 @@ enable_anonymous_sign_ins = true
 enable_signup = true
 otp_expiry = 3600
 
+
+# Sign in with Google (also grants Drive drive.file + Sheets access, requested by the app).
+# The secret is read from the environment by scripts/setup-google-secret.ps1, never stored here.
+[auth.external.google]
+enabled = true
+client_id = "293481315151-oil8ort1vdaiph7vlhoml10dam735pou.apps.googleusercontent.com"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
