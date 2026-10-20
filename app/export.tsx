@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Linking, Pressable, StyleSheet, Switch, View } from "react-native";
 import { Button, IconButton, haptic } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -36,6 +36,11 @@ export default function ExportScreen() {
   const unapproved = scoped.filter((invoice) => invoice.status !== "approved").length;
 
   const [title, setTitle] = useState(batch?.name ?? (params.scope === "selection" ? t("exportSelected") : t("quickExportAll")));
+  const titleEdited = useRef(false);
+  // The batch may load after the first render (deep links); use its name unless the user typed one.
+  useEffect(() => {
+    if (batch?.name && !titleEdited.current) setTitle(batch.name);
+  }, [batch?.name]);
   const [format, setFormat] = useState<ExportFormat>("xlsx");
   const [includeUnapproved, setIncludeUnapproved] = useState(true);
   const [share, setShare] = useState(true);
@@ -155,7 +160,15 @@ export default function ExportScreen() {
       </Row>
 
       <View style={{ marginTop: 16 }}>
-        <Field label={t("exportFileName")} value={title} onChangeText={setTitle} icon="file-outline" />
+        <Field
+          label={t("exportFileName")}
+          value={title}
+          onChangeText={(value) => {
+            titleEdited.current = true;
+            setTitle(value);
+          }}
+          icon="file-outline"
+        />
       </View>
 
       <Text variant="label" tone="muted" style={styles.label}>

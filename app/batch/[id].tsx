@@ -6,7 +6,7 @@ import { InvoiceRow } from "@/components/invoice-row";
 import { Button, IconButton } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
-import { Card, EmptyState, ProgressBar, Row, ScrollScreen, SectionTitle } from "@/components/ui/layout";
+import { Card, EmptyState, Loading, ProgressBar, Row, ScrollScreen, SectionTitle } from "@/components/ui/layout";
 import { Text } from "@/components/ui/text";
 import { confirmAction } from "@/lib/dialogs";
 import { useI18n } from "@/lib/i18n";
@@ -25,6 +25,7 @@ export default function BatchScreen() {
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(batch?.name ?? "");
 
+  if (!batch && !store.ready) return <Loading />;
   if (!batch) {
     return (
       <ScrollScreen>
