@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, IconButton, haptic } from "@/components/ui/button";
 import { Chip, Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
-import { Card, EmptyState, Row, Screen } from "@/components/ui/layout";
+import { Card, EmptyState, Loading, Row, Screen } from "@/components/ui/layout";
 import { Text } from "@/components/ui/text";
 import { confirmAction, notify } from "@/lib/dialogs";
 import { useI18n } from "@/lib/i18n";
@@ -46,6 +46,17 @@ export default function InvoiceReviewScreen() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const dirty = useRef(false);
 
+  // The store loads asynchronously; pick the invoice up once it arrives (deep links, reloads).
+  useEffect(() => {
+    if (draft || !invoice) return;
+    setDraft(invoice);
+    setAmountText({
+      subtotal: invoice.subtotal ? String(invoice.subtotal) : "",
+      vat: invoice.vat ? String(invoice.vat) : "",
+      total: invoice.total ? String(invoice.total) : "",
+    });
+  }, [draft, invoice]);
+
   // Autosave edits so nothing is lost when leaving the screen.
   useEffect(() => {
     if (!draft || !dirty.current) return;
@@ -71,6 +82,7 @@ export default function InvoiceReviewScreen() {
     return [...seen];
   }, [id, store.invoices]);
 
+  if (!draft && !store.ready) return <Loading />;
   if (!draft) {
     return (
       <Screen>
