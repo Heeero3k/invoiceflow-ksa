@@ -181,7 +181,8 @@ async function createSpreadsheet(accessToken: string, title: string, sheetTitle:
   const created = await sheetsApi<{ spreadsheetId: string; sheets: { properties: { sheetId: number } }[] }>(accessToken, "", {
     method: "POST",
     body: JSON.stringify({
-      properties: { title, locale: rtl ? "ar_SA" : "en_US" },
+      // Sheets rejects "ar_SA"; en_US keeps dot decimals for accounting tools, rightToLeft handles Arabic layout.
+      properties: { title, locale: "en_US", timeZone: "Asia/Riyadh" },
       sheets: [{ properties: { title: sheetTitle, rightToLeft: rtl, gridProperties: { frozenRowCount: 1 } } }],
     }),
   });
