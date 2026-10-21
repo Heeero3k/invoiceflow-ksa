@@ -10,6 +10,7 @@ import "react-native-reanimated";
 import { iconFont } from "@/components/ui/icon";
 import { initAds } from "@/lib/ads";
 import { AuthProvider } from "@/lib/auth";
+import { useDailyDriveSync } from "@/lib/daily-drive";
 import { PreferencesProvider, usePreferences } from "@/lib/preferences";
 import { StoreProvider } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
@@ -19,6 +20,7 @@ SplashScreen.preventAutoHideAsync().catch(() => undefined);
 function AppStack() {
   const { colors, scheme } = useTheme();
   const { ready, language } = usePreferences();
+  useDailyDriveSync();
 
   useEffect(() => {
     if (Platform.OS === "web" && typeof document !== "undefined") {

@@ -120,6 +120,18 @@ export default function SettingsScreen() {
             <Switch value={prefs.keepOriginals} onValueChange={(keepOriginals) => prefs.update({ keepOriginals })} trackColor={{ true: colors.accent, false: colors.borderStrong }} thumbColor="#FFFFFF" />
           </Row>
         ) : null}
+        {auth.isSignedIn ? (
+          <Row gap={12} style={{ marginTop: 18 }}>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyStrong">{t("dailyDriveFile")}</Text>
+              <Text variant="caption" tone="muted">
+                {t("dailyDriveFileHint")}
+              </Text>
+            </View>
+            <Switch value={prefs.dailyDriveFile} onValueChange={(dailyDriveFile) => prefs.update({ dailyDriveFile })} trackColor={{ true: colors.accent, false: colors.borderStrong }} thumbColor="#FFFFFF" />
+          </Row>
+        ) : null}
+
       </Card>
 
       <SectionTitle title={t("dataPrivacy")} />
