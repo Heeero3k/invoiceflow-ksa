@@ -78,5 +78,8 @@ const files = {
   "splash-icon": svg(1024, `<rect x="112" y="112" width="800" height="800" rx="200" fill="url(#bg)"/>${centred(1024, 0.78, mark())}`),
   favicon: svg(48, `<rect width="48" height="48" rx="10" fill="url(#bg)"/>${centred(48, 0.06, mark())}`),
 };
-for (const [name, s] of Object.entries(files)) fs.writeFileSync(path.join(out, `${name}.svg`), s);
-console.log(Object.keys(files).join(" "));
+module.exports = { mark, defs, NAVY, GOLD, GOLD_LIGHT, IVORY };
+if (require.main === module) {
+  for (const [name, s] of Object.entries(files)) fs.writeFileSync(path.join(out, `${name}.svg`), s);
+  console.log(Object.keys(files).join(" "));
+}

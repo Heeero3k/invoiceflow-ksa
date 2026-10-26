@@ -12,6 +12,8 @@ type Preferences = {
   keepOriginals: boolean;
   /** Export Excel files in the app language or always Arabic/English. */
   exportLanguage: Language;
+  /** Keep one Excel file per project per day updated in the user's Google Drive. */
+  dailyDriveFile: boolean;
 };
 
 type PreferencesValue = Preferences & {
@@ -34,7 +36,7 @@ const PreferencesContext = createContext<PreferencesValue | null>(null);
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<Preferences>(() => {
     const language = defaultLanguage();
-    return { language, themeMode: "system", keepOriginals: true, exportLanguage: language };
+    return { language, themeMode: "system", keepOriginals: true, exportLanguage: language, dailyDriveFile: true };
   });
   const [ready, setReady] = useState(false);
 

@@ -31,9 +31,10 @@ export function createDriveFolder(access: DriveAccess, name: string, parentId = 
   });
 }
 
-/** Sends raw bytes (uploadType=media), then names and files the new Drive item. */
-async function uploadMedia(access: DriveAccess, source: { uri?: string; bytes?: Uint8Array }, mimeType: string): Promise<string> {
-  const url = `${UPLOAD}?uploadType=media&fields=id`;
+/** Sends raw bytes (uploadType=media) as a new Drive item, or as new content for `fileId`. */
+async function uploadMedia(access: DriveAccess, source: { uri?: string; bytes?: Uint8Array }, mimeType: string, fileId?: string): Promise<string> {
+  const url = `${UPLOAD}${fileId ? `/${fileId}` : ""}?uploadType=media&fields=id`;
+  const method = fileId ? "PATCH" : "POST";
   if (Platform.OS !== "web") {
     let uri = source.uri;
     if (!uri) {
@@ -42,7 +43,7 @@ async function uploadMedia(access: DriveAccess, source: { uri?: string; bytes?: 
       await FileSystem.writeAsStringAsync(uri, bytesToBase64(source.bytes!), { encoding: FileSystem.EncodingType.Base64 });
     }
     const result = await FileSystem.uploadAsync(url, uri, {
-      httpMethod: "POST",
+      httpMethod: method,
       uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
       headers: { Authorization: `Bearer ${access.accessToken}`, "Content-Type": mimeType },
     });
@@ -51,7 +52,7 @@ async function uploadMedia(access: DriveAccess, source: { uri?: string; bytes?: 
   }
   const bytes = source.bytes ?? (await readFileBytes(source.uri!));
   const response = await fetch(url, {
-    method: "POST",
+    method,
     headers: { Authorization: `Bearer ${access.accessToken}`, "Content-Type": mimeType },
     body: new Blob([bytes as BlobPart], { type: mimeType }),
   });
@@ -70,4 +71,23 @@ export async function uploadToDrive(
     method: "PATCH",
     body: JSON.stringify({ name: file.name }),
   });
+}
+
+/** Drive search literal: names may contain quotes or backslashes. */
+const quote = (value: string) => `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+
+/** First non-trashed item with this exact name inside `parentId` (only files this app created are visible). */
+export async function findDriveItem(access: DriveAccess, name: string, parentId: string, folder = false): Promise<DriveFile | null> {
+  const q = [`name = ${quote(name)}`, `${quote(parentId)} in parents`, "trashed = false", `mimeType ${folder ? "=" : "!="} 'application/vnd.google-apps.folder'`].join(" and ");
+  const result = await driveJson<{ files: DriveFile[] }>(access, `${DRIVE}/files?q=${encodeURIComponent(q)}&fields=files(id,webViewLink)&pageSize=1`, { method: "GET" });
+  return result.files[0] ?? null;
+}
+
+export async function findOrCreateDriveFolder(access: DriveAccess, name: string, parentId = access.folderId) {
+  return (await findDriveItem(access, name, parentId, true)) ?? createDriveFolder(access, name, parentId);
+}
+
+/** Replaces the content of an existing Drive file, keeping its name, link and sharing. */
+export async function updateDriveFile(access: DriveAccess, fileId: string, file: { mimeType: string; bytes: Uint8Array }) {
+  await uploadMedia(access, file, file.mimeType, fileId);
 }

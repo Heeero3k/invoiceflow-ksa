@@ -79,14 +79,14 @@ exp://**
 
 عند **تسجيل الدخول بحساب Google** يوافق المستخدم مرة واحدة على:
 - `drive.file`: ينشئ التطبيق مجلد **InvoiceFlow KSA** في Google Drive الخاص بالمستخدم، ويحفظ فيه ملف Excel لكل تصدير مع صور الفواتير الأصلية. لا يستطيع التطبيق رؤية أي ملفات أخرى في Drive.
-- `spreadsheets`: ينشئ جدول "InvoiceFlow KSA — سجل الفواتير" ويضيف إليه الفواتير كصفوف.
+- جدول "InvoiceFlow KSA — سجل الفواتير" يُنشأ ويُحدَّث بنفس صلاحية `drive.file` (ملف أنشأه التطبيق)، فلا حاجة لصلاحية `spreadsheets`.
 
 المستخدم الذي يسجّل بالبريد أو Apple يستطيع ربط Google لاحقاً من شاشة "التصدير".
 
 الإعداد:
 
 1. في Google Cloud Console فعّل **Google Drive API** و**Google Sheets API**.
-2. في **OAuth consent screen** أضف الصلاحيات: `drive.file`، `spreadsheets`، `openid`، `email`.
+2. في **OAuth consent screen** أضف الصلاحيات: `drive.file`، `openid`، `email`، `profile`.
 3. **مهم:** استخدم **نفس OAuth Client (Web)** في مزوّد Google داخل Supabase (الخطوة 4) وفي متغيرات الخادم أدناه. لهذا تُحفظ صلاحية Drive مباشرة بعد تسجيل الدخول دون شاشة موافقة ثانية.
 4. أضف لهذا الـ Client عنواني Redirect:
    - `https://YOUR-PROJECT-REF.supabase.co/auth/v1/callback`
@@ -97,7 +97,7 @@ exp://**
 npx supabase secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... SHEETS_REDIRECT_URI=https://YOUR-PROJECT-REF.supabase.co/functions/v1/sheets-callback
 ```
 
-> صلاحيتا `spreadsheets` و`drive.file` تحتاجان **Verification** من Google قبل فتح التسجيل للجميع؛ `spreadsheets` حساسة: قبل النشر العام اطلب **Verification** لشاشة الموافقة من Google (يأخذ أياماً). قبلها يعمل الربط لحسابات المختبرين المضافين فقط.
+> كل الصلاحيات غير حساسة (`drive.file`، `openid`، `email`، `profile`)، لذلك لا يحتاج النشر العام إلى مراجعة الصلاحيات من Google، فقط التحقق من العلامة التجارية (الاسم والشعار) إن وُجد شعار.
 
 ## 6) نشر دوال الخادم
 
