@@ -3,7 +3,6 @@ import { AppError, requireEnv } from "./http.ts";
 export const GOOGLE_SCOPES = [
   "openid",
   "email",
-  "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/drive.file",
 ];
 

@@ -29,7 +29,7 @@ enable_signup = true
 otp_expiry = 3600
 
 
-# Sign in with Google (also grants Drive drive.file + Sheets access, requested by the app).
+# Sign in with Google (also grants drive.file, requested by the app, for Drive and the app's own Sheets).
 # The secret is read from the environment by scripts/setup-google-secret.ps1, never stored here.
 [auth.external.google]
 enabled = true

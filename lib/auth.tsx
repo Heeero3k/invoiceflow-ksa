@@ -10,7 +10,9 @@ WebBrowser.maybeCompleteAuthSession();
 
 // Signing in with Google also grants access to the user's own Drive (files this
 // app creates) and Sheets, so invoices and Excel files land in their account.
-const GOOGLE_SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets";
+// drive.file only (non-sensitive): Drive uploads and the Sheets API both work on files this app created,
+// so public launch needs no restricted-scope verification.
+const GOOGLE_SCOPES = "https://www.googleapis.com/auth/drive.file";
 const GOOGLE_QUERY = { access_type: "offline", prompt: "consent" };
 
 type AuthValue = {
