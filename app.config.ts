@@ -15,7 +15,7 @@ const config: ExpoConfig = {
   name: "InvoiceFlow KSA",
   slug: "invoiceflow-ksa",
   owner: "hero2011",
-  version: "1.1.1",
+  version: "1.2.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: SCHEME,
@@ -32,7 +32,7 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    versionCode: 13,
+    versionCode: 14,
     adaptiveIcon: {
       backgroundColor: "#0F1B2D",
       foregroundImage: "./assets/images/android-icon-foreground.png",

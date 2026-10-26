@@ -3,9 +3,9 @@ import { Platform } from "react-native";
 import mobileAds, { AdEventType, InterstitialAd, MaxAdContentRating, TestIds } from "react-native-google-mobile-ads";
 
 const env = {
-  bannerAndroid: process.env.EXPO_PUBLIC_ADMOB_BANNER_ANDROID || "ca-app-pub-2689118284753908/6316280227",
+  bannerAndroid: process.env.EXPO_PUBLIC_ADMOB_BANNER_ANDROID || "ca-app-pub-2689118284753908/6729237409",
   bannerIos: process.env.EXPO_PUBLIC_ADMOB_BANNER_IOS ?? "",
-  interstitialAndroid: process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ANDROID ?? "",
+  interstitialAndroid: process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ANDROID || "ca-app-pub-2689118284753908/9355400742",
   interstitialIos: process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_IOS ?? "",
 };
 
